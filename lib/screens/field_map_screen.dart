@@ -563,10 +563,10 @@ class _FieldMapScreenState extends State<FieldMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Fields — Field Map'),
-        actions: [IconButton(onPressed: _showFieldList, icon: const Icon(Icons.format_list_bulleted))],
-      ),
+      // appBar: AppBar(
+      //   title: const Text('My Fields — Field Map'),
+      //   actions: [IconButton(onPressed: _showFieldList, icon: const Icon(Icons.format_list_bulleted))],
+      // ),
       body: Stack(children: [
         FutureBuilder<String?>(
           future: _getAnyLocalTemplateForMap(),
@@ -669,7 +669,7 @@ if (_currentPosition != null)
           top: 12,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: const Color.fromRGBO(255, 255, 255, 0.9), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: const Color.fromARGB(230, 70, 69, 69), borderRadius: BorderRadius.circular(8)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(_isAdding ? 'Add Field: Tap on map to place corners' : 'Tap a field to view details', style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
