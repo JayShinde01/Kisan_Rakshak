@@ -1,10 +1,9 @@
-// lib/screens/diagnose_screen.dart (renamed from home_screen for clarity)
+// lib/screens/diagnose_screen.dart
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-// ADD THESE IMPORTS (already in your project)
 import '../services/cloudinary_service.dart';
 import '../services/auth_service.dart';
 
@@ -16,16 +15,17 @@ class DiagnoseScreen extends StatefulWidget {
 }
 
 class _DiagnoseScreenState extends State<DiagnoseScreen> {
+  // Pickers & state
   final ImagePicker _picker = ImagePicker();
   File? _lastPickedImage;
-  // State for upload process
   bool _isUploading = false;
-  // The primary accent color for action buttons and focus areas
-  final accentColor = const Color(0xFF74C043);
-  // Color for the main background
-  final darkBg = const Color(0xFF0E0E0E);
-  // Color for cards/containers
-  final cardColor = const Color(0xFF1A1A1A);
+
+  // Palette
+  static const Color _primaryGreen = Color(0xFF2E8B3A);
+  static const Color _accentGreen = Color(0xFF74C043);
+  static const Color _softCanvas = Color(0xFFF4FBF4);
+  static const Color _contentCard = Colors.white;
+  static const double _cardRadius = 16.0;
 
   @override
   void initState() {
@@ -33,19 +33,20 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
     _checkLoggedIn();
   }
 
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   Future<void> _checkLoggedIn() async {
-    // Check if the user is logged in
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (!mounted) return;
-      // Redirect to the login screen if not logged in
       Navigator.pushReplacementNamed(context, '/login');
     }
   }
 
-  // ---------------- IMAGE PICK + CLOUDINARY UPLOAD ----------------
-
-  /// Handles picking an image from camera or gallery.
+  // ---------- Image pickers ----------
   Future<void> _pickImage(ImageSource source) async {
     try {
       final XFile? xfile = await _picker.pickImage(
@@ -53,285 +54,356 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
         imageQuality: 80,
         maxWidth: 1200,
       );
-
       if (xfile == null) return;
-
       final file = File(xfile.path);
       setState(() => _lastPickedImage = file);
 
-      // Immediately show the confirmation dialog after picking
+      // Immediately show confirmation dialog
       if (!mounted) return;
       _showUploadConfirmationDialog(file);
-
     } catch (e, st) {
       debugPrint('Image pick error: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ Failed to pick image. Check permissions.'), backgroundColor: Colors.redAccent),
+        const SnackBar(
+            content: Text('Failed to pick image. Check permissions.'),
+            backgroundColor: Colors.redAccent),
       );
     }
   }
 
-  /// Displays a dialog to confirm the image upload.
+  // ---------- Confirmation dialog ----------
   void _showUploadConfirmationDialog(File file) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: cardColor,
-        title: const Text('Confirm Upload', style: TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: double.infinity,
-          height: 300,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.file(file, fit: BoxFit.cover),
-          ),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Confirm Upload', style: TextStyle(fontWeight: FontWeight.w700)),
+        content: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.file(file, fit: BoxFit.cover),
         ),
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              // Optional: Clear preview if canceled
+              Navigator.pop(ctx);
               setState(() => _lastPickedImage = null);
             },
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: const Text('Cancel'),
           ),
           ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: accentColor),
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               _startUploadProcess(file);
             },
-            icon: const Icon(Icons.cloud_upload),
+            icon: const Icon(Icons.cloud_upload_outlined),
             label: const Text('Upload & Diagnose'),
+            style: ElevatedButton.styleFrom(backgroundColor: _accentGreen, foregroundColor: Colors.black),
           ),
         ],
       ),
     );
   }
 
-  /// Executes the Cloudinary upload and backend saving logic.
+  // ---------- Upload process ----------
   Future<void> _startUploadProcess(File file) async {
     if (_isUploading) return;
-
     setState(() => _isUploading = true);
+
+    // optional: small immediate feedback
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('🚀 Uploading image... Please wait.'), backgroundColor: accentColor),
+      const SnackBar(content: Text('Uploading image...'), duration: Duration(seconds: 2)),
     );
 
     try {
-      // 1. Upload via CloudinaryService
+      // 1) Upload to cloud storage (CloudinaryService expected)
       final url = await CloudinaryService.uploadImage(file);
 
-      if (url == null) {
-        throw Exception('Cloudinary upload returned null URL.');
-      }
+      if (url == null) throw Exception('Upload returned null URL');
 
-      // 2. Save metadata to backend (using AuthService)
+      // 2) Save metadata via AuthService (expected method)
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        if (!mounted) return;
-        throw Exception('User not logged in.');
-      }
+      if (user == null) throw Exception('User not signed in');
+      await AuthService().saveCropImage(url: url, userId: user.uid, source: 'camera');
 
-      await AuthService().saveCropImage(
-        url: url,
-        userId: user.uid,
-        // Determine the source used to pick the image
-        source: _lastPickedImage == file ? 'camera' : 'gallery', 
-      );
-
-      // 3. Success Feedback
+      // 3) Success feedback
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ Image uploaded! Diagnosis starting...'), backgroundColor: accentColor),
+        const SnackBar(content: Text('Image uploaded. Diagnosis started!')),
       );
-      // Optional: Navigate to a results page here
-      // Navigator.pushNamed(context, '/results', arguments: url);
 
-    } catch (e) {
-      debugPrint('Upload process failed: $e');
+      // TODO: navigate to results page if you have one:
+      // Navigator.pushNamed(context, '/diagnosis_results', arguments: url);
+
+    } catch (e, st) {
+      debugPrint('Upload/process error: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ Upload failed. Please try again.'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Upload failed. Try again.'), backgroundColor: Colors.redAccent),
       );
     } finally {
-      // 4. Reset state after upload (whether success or failure)
-      setState(() {
-        _isUploading = false;
-        _lastPickedImage = null; // Clear preview after successful/failed attempt
-      });
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _lastPickedImage = null;
+        });
+      }
     }
   }
 
+  // ---------- UI helpers ----------
+  Widget _miniTip(IconData icon, String title, String subtitle) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _accentGreen.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: _accentGreen, size: 18),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(subtitle, style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+            ],
+          )
+        ],
+      ),
+    );
+  }
 
+  Widget _initialCard(double width, {double? height}) {
+    return Container(
+      width: width,
+      constraints: BoxConstraints(minHeight: 160, maxWidth: 900, maxHeight: height ?? double.infinity),
+      decoration: BoxDecoration(
+        color: _contentCard,
+        borderRadius: BorderRadius.circular(_cardRadius),
+        boxShadow: [BoxShadow(color: _primaryGreen.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 6))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 22.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.camera_alt_outlined, size: 72, color: _accentGreen),
+            const SizedBox(height: 12),
+            const Text('Ready to diagnose', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+              child: Text(
+                'Tap camera to take a photo or choose from gallery. Try to include the whole leaf and a few nearby leaves for context.',
+                style: TextStyle(color: Colors.grey[700]),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 14),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _miniTip(Icons.wb_sunny_outlined, 'Tip: daylight', 'Use natural light'),
+                  const SizedBox(width: 10),
+                  _miniTip(Icons.photo_size_select_actual_outlined, 'Macro', 'Fill ~60% of frame'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _previewCard(double width, {double? height}) {
+    if (_lastPickedImage == null) return const SizedBox.shrink();
+    return Container(
+      width: width,
+      constraints: BoxConstraints(minHeight: 200, maxWidth: 900, maxHeight: height ?? double.infinity),
+      decoration: BoxDecoration(
+        color: _contentCard,
+        borderRadius: BorderRadius.circular(_cardRadius),
+        boxShadow: [BoxShadow(color: _primaryGreen.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 6))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(_cardRadius),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AspectRatio(
+              aspectRatio: 4 / 3,
+              child: Image.file(_lastPickedImage!, fit: BoxFit.cover, width: double.infinity),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showUploadConfirmationDialog(_lastPickedImage!),
+                      icon: const Icon(Icons.cloud_upload_outlined),
+                      label: const Text('Upload & Diagnose'),
+                      style: ElevatedButton.styleFrom(backgroundColor: _accentGreen, foregroundColor: Colors.black),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton(
+                    onPressed: () => setState(() => _lastPickedImage = null),
+                    child: const Text('Retake'),
+                  ),
+                ],
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusCard(double width, {double? height}) {
+    return Container(
+      width: width,
+      constraints: BoxConstraints(minHeight: 140, maxWidth: 900, maxHeight: height ?? double.infinity),
+      decoration: BoxDecoration(
+        color: _contentCard,
+        borderRadius: BorderRadius.circular(_cardRadius),
+        boxShadow: [BoxShadow(color: _primaryGreen.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 6))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18.0),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          CircularProgressIndicator(color: _accentGreen),
+          const SizedBox(height: 12),
+          const Text('Processing Image...', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          const Text('Please wait while we analyze your photo.', textAlign: TextAlign.center),
+        ]),
+      ),
+    );
+  }
+
+  // Build selector for which card to show
+  Widget _buildImageOrPromptCard(bool isWide) {
+    final double cardW = isWide ? 520 : MediaQuery.of(context).size.width * 0.92;
+    final double cardH = 320;
+
+    if (_isUploading) return _statusCard(cardW, height: cardH);
+    if (_lastPickedImage != null) return _previewCard(cardW, height: cardH);
+    return _initialCard(cardW, height: cardH);
+  }
+
+  // Build action buttons row
+  Widget _buildActionButtons(bool isWide) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        ElevatedButton.icon(
+          onPressed: _isUploading ? null : () => _pickImage(ImageSource.camera),
+          icon: const Icon(Icons.camera_alt_outlined),
+          label: const Text('Camera'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _accentGreen,
+            foregroundColor: Colors.black,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 6,
+          ),
+        ),
+        const SizedBox(width: 12),
+        ElevatedButton.icon(
+          onPressed: _isUploading ? null : () => _pickImage(ImageSource.gallery),
+          icon: const Icon(Icons.photo_library_outlined),
+          label: const Text('Gallery'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey.shade200,
+            foregroundColor: Colors.black87,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------- Build ----------
   @override
   Widget build(BuildContext context) {
+    final screenW = MediaQuery.of(context).size.width;
+    final isWide = screenW > 640;
+
     return Scaffold(
-      // appBar: AppBar(
-      //   title: const Text('Plant Diagnosis 🌿'),
-      //   backgroundColor: darkBg,
-      //   elevation: 0,
-      // ),
-      backgroundColor: darkBg,
+      backgroundColor: _softCanvas,
+     
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Top Information Card
+              // Hero info card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: cardColor,
-                  borderRadius: BorderRadius.circular(10),
+                  color: _contentCard,
+                  borderRadius: BorderRadius.circular(_cardRadius),
+                  boxShadow: [BoxShadow(color: _primaryGreen.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 4))],
                 ),
-                child: const Text(
-                  '💡 Upload a clear image of the affected crop leaf for an instant diagnosis.',
-                  style: TextStyle(color: Colors.white70),
-                  textAlign: TextAlign.center,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('Plant Diagnosis', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                    SizedBox(height: 8),
+                    Text(
+                      'Take a clear photo of the affected leaf. We will analyze the image and provide simple steps you can follow.',
+                      style: TextStyle(color: Colors.black87),
+                    ),
+                  ],
                 ),
               ),
+
+              const SizedBox(height: 18),
+
+              // The main card area (prompt / preview / status)
+              Center(child: _buildImageOrPromptCard(isWide)),
+
+              const SizedBox(height: 18),
+
+              // Action buttons
+              _buildActionButtons(isWide),
 
               const SizedBox(height: 24),
 
-              // Main Interactive Area (Expanded to take up space)
-              Expanded(
-                child: Center(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Display the Image Preview or the Initial Prompt
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          child: _buildImageOrPrompt(),
-                        ),
-                        
-                        const SizedBox(height: 30),
-
-                        // Action Buttons (Camera / Gallery / Upload)
-                        _buildActionButtons(),
-                      ],
-                    ),
-                  ),
-                ),
+              // Small footer text
+              Text(
+                'Your photos are used only for diagnosis and are stored securely.',
+                style: TextStyle(color: Colors.grey.shade700),
+                textAlign: TextAlign.center,
               ),
+
+              // Add bottom padding so FAB doesn't overlap
+              SizedBox(height: 72),
             ],
           ),
         ),
       ),
-    );
-  }
 
-  /// Builds the main content area (Image Preview or Prompt).
-  Widget _buildImageOrPrompt() {
-    // 1. Loading State
-    if (_isUploading) {
-      return Container(
-        key: const ValueKey('uploading'),
-        width: 300,
-        height: 250,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: accentColor),
-            const SizedBox(height: 15),
-            Text('Processing Image...', style: TextStyle(color: accentColor, fontSize: 16)),
-            const SizedBox(height: 5),
-            const Text('This may take a moment.', style: TextStyle(color: Colors.white54)),
-          ],
-        ),
-      );
-    }
-    
-    // 2. Image Preview State
-    else if (_lastPickedImage != null) {
-      return Container(
-        key: const ValueKey('preview'),
-        width: 300,
-        height: 250,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [BoxShadow(color: accentColor.withOpacity(0.3), blurRadius: 10)],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(15),
-          child: Image.file(_lastPickedImage!, fit: BoxFit.cover),
-        ),
-      );
-    }
-
-    // 3. Initial Prompt State
-    return Column(
-      key: const ValueKey('initial'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.camera_alt_outlined, size: 80, color: accentColor.withOpacity(0.8)),
-        const SizedBox(height: 12),
-        const Text(
-          'Start Diagnosing',
-          style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Tap below to take a picture of the plant leaf or choose from your gallery.',
-          style: TextStyle(color: Colors.white60),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  /// Builds the row of action buttons.
-  Widget _buildActionButtons() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // Camera Button
-        _buildActionButton(
-          label: 'Camera',
-          icon: Icons.camera_alt,
-          color: accentColor,
-          onPressed: _isUploading ? null : () => _pickImage(ImageSource.camera),
-        ),
-        const SizedBox(width: 16),
-        // Gallery Button
-        _buildActionButton(
-          label: 'Gallery',
-          icon: Icons.photo_library,
-          color: Colors.grey[700],
-          onPressed: _isUploading ? null : () => _pickImage(ImageSource.gallery),
-        ),
-      ],
-    );
-  }
-
-  /// Helper widget for creating stylized action buttons.
-  Widget _buildActionButton({
-    required String label,
-    required IconData icon,
-    required Color? color,
-    required VoidCallback? onPressed,
-  }) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, color: Colors.white),
-      label: Text(label, style: const TextStyle(color: Colors.white, fontSize: 16)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 5,
-        // Ensure buttons are disabled visually when uploading
-        foregroundColor: Colors.white,
+      // Floating action button (friendly and big)
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isUploading ? null : () => _pickImage(ImageSource.camera),
+        backgroundColor: _accentGreen,
+        foregroundColor: Colors.black,
+        elevation: 6,
+        icon: const Icon(Icons.camera_alt_outlined),
+        label: const Text('Scan'),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }

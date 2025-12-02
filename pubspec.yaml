@@ -30,6 +30,9 @@ dependencies:
   flutter_image_compress: ^2.1.0
   permission_handler: ^11.3.0
   url_launcher: ^6.3.0
+  table_calendar: ^3.0.8
+
+ 
 
   # ---------- OPTIONAL PACKAGES ----------
   # Uncomment when needed:
@@ -50,5 +53,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/langs/languages.json
-    - assets/audio/
-    # - assets/models/
+    

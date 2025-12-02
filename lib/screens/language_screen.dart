@@ -23,6 +23,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
   bool _loading = true;
   bool _loadFailed = false;
   String? _playingAsset;
+  String _searchText = '';
 
   @override
   void initState() {
@@ -49,7 +50,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
       debugPrint('LanguageScreen._initAll error: $e\n$st');
       // fallback minimal data so UI still works
       languages = [
-        {"code": "phone", "native": "Phone's language — en", "audio": null},
+        {"code": "phone", "native": "Phone's language — English", "audio": null},
         {"code": "en", "native": "English", "audio": null},
       ];
       selectedCode ??= 'en';
@@ -62,7 +63,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
   /// Tries common locations for the JSON asset and parses it.
   Future<void> _loadLanguages() async {
     const candidates = [
-      'assets/langs/languages.json', // alternative
+      'assets/langs/languages.json', // your languages file
     ];
 
     String? raw;
@@ -215,81 +216,84 @@ class _LanguageScreenState extends State<LanguageScreen> {
     final isPlaying = (_playingAsset != null && audio != null && _playingAsset == audio);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => _onSelectLanguage(lang, play: true),
-        child: Container(
-          height: 88,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF2A2A2A) : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF64DD17) : Colors.transparent,
-              width: isSelected ? 1.5 : 0,
-            ),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Card(
+        elevation: isSelected ? 6 : 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: isSelected ? const Color(0xFF64DD17) : Colors.transparent,
+            width: isSelected ? 1.8 : 0,
           ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: Colors.grey.shade800,
-                child: Text(
-                  avatarLabel,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _onSelectLanguage(lang),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: isSelected ? const Color(0xFFEFFFEF) : const Color(0xFFEEF8EE),
+                  child: Text(
+                    avatarLabel,
+                    style: TextStyle(
+                      color: isSelected ? const Color(0xFF2E8B3A) : const Color(0xFF2E8B3A),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      native,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        native,
+                        style: TextStyle(
+                          color: isSelected ? const Color(0xFF0B3A1B) : Colors.black87,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      code ?? '',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 13,
+                      const SizedBox(height: 6),
+                      Text(
+                        code ?? '',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              if (audio != null)
-                IconButton(
-                  onPressed: () => _playAudio(audio),
-                  tooltip: 'Play language name',
-                  icon: isPlaying
-                      ? const Icon(Icons.stop, color: Color(0xFF64DD17))
-                      : const Icon(Icons.volume_up, color: Colors.white),
+                // play button
+                if (audio != null)
+                  IconButton(
+                    onPressed: () => _playAudio(audio),
+                    tooltip: 'Play language name',
+                    icon: isPlaying
+                        ? const Icon(Icons.stop_circle_outlined, color: Color(0xFF2E8B3A))
+                        : const Icon(Icons.volume_up_outlined, color: Color(0xFF2E8B3A)),
+                  ),
+                // check or radio
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFF64DD17) : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: isSelected ? Colors.transparent : Colors.grey.shade300),
+                  ),
+                  child: Icon(
+                    isSelected ? Icons.check : Icons.circle_outlined,
+                    size: 16,
+                    color: isSelected ? Colors.white : Colors.grey[500],
+                  ),
                 ),
-              Radio<String>(
-                value: code ?? '',
-                groupValue: selectedCode ?? '',
-                onChanged: (value) {
-                  setState(() {
-                    selectedCode = value;
-                  });
-                },
-                activeColor: const Color(0xFF64DD17),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -300,6 +304,16 @@ class _LanguageScreenState extends State<LanguageScreen> {
   void dispose() {
     _audioPlayer.dispose();
     super.dispose();
+  }
+
+  List<dynamic> _filteredLanguages() {
+    if (_searchText.trim().isEmpty) return languages;
+    final q = _searchText.toLowerCase().trim();
+    return languages.where((l) {
+      final native = (l['native'] ?? '').toString().toLowerCase();
+      final code = (l['code'] ?? '').toString().toLowerCase();
+      return native.contains(q) || code.contains(q);
+    }).toList();
   }
 
   Widget _buildBody() {
@@ -315,12 +329,17 @@ class _LanguageScreenState extends State<LanguageScreen> {
           children: [
             const Text(
               'Failed to load languages.',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: Colors.black54),
             ),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _initAll,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF64DD17), foregroundColor: Colors.black),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF64DD17),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
               child: const Text('Retry'),
             ),
           ],
@@ -328,40 +347,101 @@ class _LanguageScreenState extends State<LanguageScreen> {
       );
     }
 
+    final filtered = _filteredLanguages();
+
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 10),
-            const Text(
-              "What's your language?",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+            // Title and short instructions
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF2E8B3A), Color(0xFF74C043)]),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3))],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    "Let's pick a language",
+                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    "Choose the language you are most comfortable with. You can change this later in settings.",
+                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              "You can change this later from Settings",
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 16),
+
+            const SizedBox(height: 14),
+
+            // White card with search + list
             Expanded(
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: languages.length,
-                itemBuilder: (context, index) {
-                  final lang = languages[index] as Map;
-                  return _buildLanguageTile(lang);
-                },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Column(
+                  children: [
+                    // Search bar
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF2F7F2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.search, color: Colors.black54),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              onChanged: (v) => setState(() => _searchText = v),
+                              decoration: const InputDecoration(
+                                hintText: 'Search language or code',
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                          if (_searchText.isNotEmpty)
+                            IconButton(
+                              onPressed: () => setState(() => _searchText = ''),
+                              icon: const Icon(Icons.clear, color: Colors.black54),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // List
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? const Center(child: Text('No languages found', style: TextStyle(color: Colors.black54)))
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                              itemCount: filtered.length,
+                              itemBuilder: (context, index) {
+                                final lang = filtered[index] as Map;
+                                return _buildLanguageTile(lang);
+                              },
+                            ),
+                    ),
+                  ],
+                ),
               ),
             ),
+            const SizedBox(height: 14),
           ],
         ),
       ),
@@ -370,22 +450,24 @@ class _LanguageScreenState extends State<LanguageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Use a darker app background so the white content card stands out
     return Scaffold(
-      backgroundColor: const Color(0xFF1B1B1B),
+      backgroundColor: const Color(0xFFF4F9F4),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B1B1B),
+        backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        automaticallyImplyLeading: false,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: const [
-            Icon(Icons.eco, color: Color(0xFF64DD17), size: 22),
+            Icon(Icons.eco, color: Color(0xFF2E8B3A), size: 22),
             SizedBox(width: 6),
             Text(
               "CropCareAI",
               style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
+                color: Color(0xFF0B3A1B),
+                fontWeight: FontWeight.w700,
                 fontSize: 18,
               ),
             )
@@ -393,10 +475,27 @@ class _LanguageScreenState extends State<LanguageScreen> {
         ),
       ),
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _onNext,
-        backgroundColor: const Color(0xFF64DD17),
-        child: const Icon(Icons.arrow_forward, color: Colors.black),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: ElevatedButton.icon(
+            onPressed: _onNext,
+            icon: const Icon(Icons.arrow_forward),
+            label: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Text(
+                'Continue',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E8B3A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 4,
+            ),
+          ),
+        ),
       ),
     );
   }
