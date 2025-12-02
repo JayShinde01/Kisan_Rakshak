@@ -1,4 +1,5 @@
 // lib/screens/landing_screen.dart
+import 'package:demo/main.dart';
 import 'package:flutter/material.dart';
 
 class LandingScreen extends StatelessWidget {
@@ -7,27 +8,112 @@ class LandingScreen extends StatelessWidget {
   // Small helper to scale font sizes for smaller/larger devices
   double _scale(BuildContext c, double v) => v * MediaQuery.of(c).textScaleFactor;
 
+  // help dialog (Updated to be theme compliant)
+  void _showHelpDialog(BuildContext c) {
+    final theme = Theme.of(c);
+    showDialog(
+      context: c,
+      builder: (_) => AlertDialog(
+        backgroundColor: theme.cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('How CropCareAI helps', style: theme.textTheme.titleLarge),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _bulletItem(c, 'Take a photo of a plant to identify pests or disease and get simple steps.'),
+            _bulletItem(c, 'Ask Advice for quick tips like water, fertilizer, and timing.'),
+            _bulletItem(c, 'Use Scan Field for larger checks and maps.'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: Text('Close', style: TextStyle(color: theme.colorScheme.primary))),
+        ],
+      ),
+    );
+  }
+
+  // simple bullet item (Theme compliant)
+  Widget _bulletItem(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 6.0, right: 8.0),
+            // Use theme primary color for bullet point
+            child: CircleAvatar(radius: 5, backgroundColor: colorScheme.primary),
+          ),
+          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
+        ],
+      ),
+    );
+  }
+
+  // small helper for feature tiles (Theme compliant)
+  Widget _featureTile(BuildContext context,
+      {required IconData icon, required String title, required String subtitle, required Color color, required VoidCallback onTap}) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Expanded(
+      child: Semantics(
+        button: true,
+        label: '$title. $subtitle',
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Card(
+            color: theme.cardColor,
+            elevation: 4,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10), // Increased padding
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: color.withOpacity(0.15),
+                    child: Icon(icon, color: color),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withOpacity(0.6)), textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
-    // Palette
-    const Color primary = Color(0xFF2E8B3A);
-    const Color accent = Color(0xFF74C043);
-    const Color canvas = Color(0xFFF4F9F4);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     final screenW = MediaQuery.of(context).size.width;
     final isWide = screenW > 640;
 
     return Scaffold(
-      backgroundColor: canvas,
+      backgroundColor: theme.scaffoldBackgroundColor, // Theme background
       body: SafeArea(
         child: Column(
           children: [
-            // Hero / header
+            // --- 1. Hero / Header ---
             Container(
               width: double.infinity,
-              padding: EdgeInsets.symmetric(vertical: isWide ? 28 : 22, horizontal: 20),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(colors: [primary, accent]),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+              padding: EdgeInsets.symmetric(vertical: isWide ? 30 : 24, horizontal: 24),
+              decoration: BoxDecoration(
+                // Use theme primary and secondary colors for the vibrant gradient
+                gradient: LinearGradient(colors: [colorScheme.primary, colorScheme.secondary]),
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)), // More pronounced curve
+                boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5))],
               ),
               child: Column(
                 children: [
@@ -36,43 +122,43 @@ class LandingScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
-                        children: const [
-                          Icon(Icons.eco, color: Colors.white, size: 28),
-                          SizedBox(width: 8),
+                        children: [
+                           Icon(Icons.eco, color: AgrioDemoApp.primaryGreen, size: 28),
+                          const SizedBox(width: 10),
                           Text(
                             'CropCareAI',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+                            style: theme.textTheme.titleLarge?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w800),
                           ),
                         ],
                       ),
                       IconButton(
                         onPressed: () => _showHelpDialog(context),
-                        icon: const Icon(Icons.help_outline, color: Colors.white),
+                        icon: Icon(Icons.help_outline, color: colorScheme.onPrimary),
                         tooltip: 'How this app helps you',
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 24),
 
                   // Headline and subtitle
                   Text(
                     'Smart, simple farming help',
-                    style: TextStyle(
-                      fontSize: _scale(context, isWide ? 28 : 22),
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontSize: _scale(context, isWide ? 30 : 24),
+                      fontWeight: FontWeight.w900,
+                      color: colorScheme.onPrimary,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Text(
                     'Point your camera at a plant and get plain-language advice — pests, disease, watering and next steps.',
-                    style: TextStyle(color: Colors.white70, fontSize: _scale(context, 14)),
+                    style: TextStyle(color: colorScheme.onPrimary.withOpacity(0.8), fontSize: _scale(context, 14)),
                     textAlign: TextAlign.center,
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 24),
 
                   // Primary CTAs
                   Row(
@@ -80,39 +166,41 @@ class LandingScreen extends StatelessWidget {
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () {
-                            // TODO: wire to camera flow
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Take Photo tapped')));
+                            // Navigate to Diagnose Screen
+                            Navigator.pushNamed(context, '/diagnose');
                           },
-                          icon: const Icon(Icons.camera_alt, color: Colors.black),
+                          icon: const Icon(Icons.camera_alt, color: Colors.black87),
                           label: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             child: Text(
                               'Identify plant — take photo',
-                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: _scale(context, 15)),
+                              style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: _scale(context, 15)),
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: accent,
+                            // Use Secondary (Yellow/Amber) for high visibility
+                            backgroundColor: colorScheme.secondary,
+                            foregroundColor: colorScheme.onSecondary,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 4,
+                            elevation: 5,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 16),
                       SizedBox(
                         width: 120,
                         child: OutlinedButton(
                           onPressed: () {
-                            // TODO: upload flow
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Upload tapped')));
+                            // Navigate to login for authenticated use
+                            Navigator.pushNamed(context, '/login');
                           },
                           child: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Text('Upload', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+                            child: Text('Login', style: TextStyle(fontWeight: FontWeight.w700,color: Colors.lightGreenAccent)),
                           ),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: BorderSide(color: Colors.white.withOpacity(0.35)),
+                            foregroundColor: colorScheme.onPrimary,
+                            side: BorderSide(color: colorScheme.onPrimary.withOpacity(0.5), width: 1.5),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
@@ -123,30 +211,25 @@ class LandingScreen extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 14),
+            const SizedBox(height: 20),
 
-            // White card area with scrollable features and content
+            // --- 2. Features and Info Card ---
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
-                  ),
-
-                  // IMPORTANT: make inner content scrollable to avoid RenderFlex overflow
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Card(
+                  color: theme.cardColor,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  elevation: 8,
+                  // IMPORTANT: make inner content scrollable
                   child: SingleChildScrollView(
-                    // physics: BouncingScrollPhysics(), // optional
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Features grid (three tiles)
+                        // Features grid
                         Padding(
-                          padding: const EdgeInsets.all(12.0),
+                          padding: const EdgeInsets.symmetric(horizontal: 12.0),
                           child: Row(
                             children: [
                               _featureTile(
@@ -154,83 +237,84 @@ class LandingScreen extends StatelessWidget {
                                 icon: Icons.chat_bubble_outline,
                                 title: 'Ask Advice',
                                 subtitle: 'Quick tips for your crop',
-                                color: primary,
+                                color: colorScheme.primary,
                                 onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ask Advice tapped'))),
                               ),
-                              const SizedBox(width: 10),
+                              const SizedBox(width: 12),
                               _featureTile(
                                 context,
                                 icon: Icons.map_outlined,
                                 title: 'Scan Field',
                                 subtitle: 'Map and area checks',
-                                color: Colors.green,
+                                color: colorScheme.secondary,
                                 onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Scan Field tapped'))),
                               ),
-                              const SizedBox(width: 10),
+                              const SizedBox(width: 12),
                               _featureTile(
                                 context,
                                 icon: Icons.book_outlined,
                                 title: 'Manuals',
                                 subtitle: 'Step-by-step guides',
-                                color: Colors.orange,
+                                color: colorScheme.error,
                                 onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Manuals tapped'))),
                               ),
                             ],
                           ),
                         ),
 
-                        const Divider(height: 1),
+                        const Divider(height: 40, indent: 20, endIndent: 20),
 
                         // Plain language quick help
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('How this helps you', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                              Text('How this helps you', style: theme.textTheme.titleLarge),
+                              const SizedBox(height: 10),
+                              _bulletItem(context, 'Identify problems quickly — get simple next steps you can follow.'),
+                              _bulletItem(context, 'Learn how much to water, when to spray, and how to care for your crop.'),
+                              _bulletItem(context, 'Save and track fields, so you know what worked and when.'),
+                              const SizedBox(height: 16),
+                              Text('Tips for best results', style: theme.textTheme.titleMedium),
                               const SizedBox(height: 8),
-                              _bulletItem('Identify problems quickly — get simple next steps you can follow.'),
-                              _bulletItem('Learn how much to water, when to spray, and how to care for your crop.'),
-                              _bulletItem('Save and track fields, so you know what worked and when.'),
-                              const SizedBox(height: 12),
-                              const Text('Tips for best results', style: TextStyle(fontWeight: FontWeight.w700)),
-                              const SizedBox(height: 8),
-                              _bulletItem('Take photos in daylight and include leaves and stems.'),
-                              _bulletItem('If you have many fields, give them names like "North field" or "Plot A".'),
+                              _bulletItem(context, 'Take photos in daylight and include leaves and stems.'),
+                              _bulletItem(context, 'If you have many fields, give them names like "North field" or "Plot A".'),
                             ],
                           ),
                         ),
+                        
+                        const SizedBox(height: 20),
 
-                        const SizedBox(height: 12),
-
-                        // small footnote + CTA row
+                        // Footnote & CTA
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12),
                           child: Row(
                             children: [
                               Expanded(
                                 child: Text(
-                                  'Don\'t worry — the app gives simple steps. If unsure, ask a neighbor or use our manuals.',
-                                  style: TextStyle(color: Colors.grey[700]),
+                                  'Don\'t worry — the app gives simple steps. Consult a local expert if unsure.',
+                                  style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              ElevatedButton(
+                              OutlinedButton(
                                 onPressed: () {
-                                  Navigator.pushNamed(context, '/login');
+                                  // Navigate to Home Screen for guest/unauthenticated use
+                                  Navigator.pushNamed(context, '/home');
                                 },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primary,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: colorScheme.primary,
+                                  side: BorderSide(color: colorScheme.primary.withOpacity(0.5)),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 ),
-                                child: const Text('Sign in', style: TextStyle(fontWeight: FontWeight.w700)),
+                                child: const Text('Go to Home'),
                               ),
                             ],
                           ),
                         ),
 
-                        // add a small bottom padding so content doesn't touch the rounded corner
                         const SizedBox(height: 12),
                       ],
                     ),
@@ -239,11 +323,11 @@ class LandingScreen extends StatelessWidget {
               ),
             ),
 
-            // Bottom illustration (small) — decorative only
+            // --- 3. Simple Footer Illustration ---
             SizedBox(
               height: 80,
               child: CustomPaint(
-                painter: _SimpleFooterPainter(),
+                painter: _SimpleFooterPainter(colorScheme.primary, colorScheme.secondary),
                 size: Size(MediaQuery.of(context).size.width, 80),
               ),
             ),
@@ -252,84 +336,22 @@ class LandingScreen extends StatelessWidget {
       ),
     );
   }
-
-  // small helper for feature tiles
-  Widget _featureTile(BuildContext context,
-      {required IconData icon, required String title, required String subtitle, required Color color, required VoidCallback onTap}) {
-    return Expanded(
-      child: Semantics(
-        button: true,
-        label: '$title. $subtitle',
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                CircleAvatar(
-                  backgroundColor: color.withOpacity(0.12),
-                  child: Icon(icon, color: color),
-                ),
-                const SizedBox(height: 10),
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12), textAlign: TextAlign.center),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // simple bullet item
-  Widget _bulletItem(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 6.0, right: 8.0),
-            child: CircleAvatar(radius: 5, backgroundColor: Color(0xFF2E8B3A)),
-          ),
-          Expanded(child: Text(text)),
-        ],
-      ),
-    );
-  }
-
-  // help dialog
-  void _showHelpDialog(BuildContext c) {
-    showDialog(
-      context: c,
-      builder: (_) => AlertDialog(
-        title: const Text('How CropCareAI helps'),
-        content: const Text(
-          '1) Take a photo of a plant to identify pests or disease and get simple steps.\n\n'
-          '2) Ask Advice for quick tips like water, fertilizer, and timing.\n\n'
-          '3) Use Scan Field for larger checks and maps.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close')),
-        ],
-      ),
-    );
-  }
 }
 
-// Simple footer painter: small rolling hills + wheat shapes (pure decoration)
+// Simple footer painter: small rolling hills + wheat shapes (theme aware)
 class _SimpleFooterPainter extends CustomPainter {
+  final Color primaryColor;
+  final Color accentColor;
+
+  _SimpleFooterPainter(this.primaryColor, this.accentColor);
+
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    final hillPaint = Paint()..color = const Color(0xFF2E8B3A).withOpacity(0.95);
+    
+    // Hill (Theme Primary)
+    final hillPaint = Paint()..color = primaryColor.withOpacity(0.85);
     final p = Path()
       ..moveTo(0, h * 0.9)
       ..quadraticBezierTo(w * 0.25, h * 0.75, w * 0.5, h * 0.9)
@@ -339,18 +361,29 @@ class _SimpleFooterPainter extends CustomPainter {
       ..close();
     canvas.drawPath(p, hillPaint);
 
-    // small wheat icons
-    final stalkPaint = Paint()..color = Colors.amber.shade600;
+    // Small wheat icons (Theme Accent)
+    final stalkPaint = Paint()..color = accentColor.withOpacity(0.8);
+    final grainPaint = Paint()..color = accentColor.withOpacity(0.9);
+    
     for (int i = 0; i < 4; i++) {
       final x = w * (0.12 + i * 0.2);
       final baseY = h * 0.65;
+      
+      // Stalk
       canvas.drawRect(Rect.fromLTWH(x - 2, baseY - 24, 4, 24), stalkPaint);
-      final grainPaint = Paint()..color = Colors.amber.shade400;
+      
+      // Grains (small ovals around the top)
       canvas.drawOval(Rect.fromCenter(center: Offset(x + 8, baseY - 18), width: 12, height: 8), grainPaint);
       canvas.drawOval(Rect.fromCenter(center: Offset(x - 8, baseY - 30), width: 12, height: 8), grainPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    // Only repaint if colors change
+    if (oldDelegate is _SimpleFooterPainter) {
+      return oldDelegate.primaryColor != primaryColor || oldDelegate.accentColor != accentColor;
+    }
+    return true;
+  }
 }

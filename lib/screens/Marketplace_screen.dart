@@ -14,7 +14,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
   String searchText = "";
 
   // 🌿 REAL CROP IMAGES (Web-safe URLs)
-  final List<Map<String, dynamic>> allProducts = [
+final List<Map<String, dynamic>> allProducts = [
 
   // 🔥 10 WHEAT SEEDS
   {
@@ -260,10 +260,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Marketplace"),
-        backgroundColor: Colors.green,
-      ),
+     
 
       body: Column(
         children: [

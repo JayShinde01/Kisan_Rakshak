@@ -1,9 +1,10 @@
 // lib/screens/contact_us_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// =======================================================
-///  LAUNCH SERVICES (call / email / whatsapp / maps)
+///  LAUNCH SERVICES (call / email / whatsapp / maps) - Logic is kept clean
 /// =======================================================
 class LaunchServices {
   final BuildContext context;
@@ -13,7 +14,7 @@ class LaunchServices {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text("❌ Unable to open $service"),
-        backgroundColor: Colors.red.shade700,
+        backgroundColor: Theme.of(context).colorScheme.error,
       ),
     );
   }
@@ -59,7 +60,8 @@ class LaunchServices {
   }
 
   Future<void> launchMaps(String query) async {
-    final Uri map = Uri.parse("https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}");
+    // Corrected URL structure for Google Maps query
+    final Uri map = Uri.parse("https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}"); 
     try {
       if (!await launchUrl(map, mode: LaunchMode.externalApplication)) {
         _showError("Maps");
@@ -71,7 +73,7 @@ class LaunchServices {
 }
 
 /// =======================================================
-///  CONTACT US PAGE (Green + White, friendly UI)
+///  CONTACT US PAGE
 /// =======================================================
 class ContactUsPage extends StatefulWidget {
   const ContactUsPage({super.key});
@@ -88,16 +90,11 @@ class _ContactUsPageState extends State<ContactUsPage> {
   final emailCtrl = TextEditingController();
   final msgCtrl = TextEditingController();
 
-  // Theme palette tuned for agriculture app
-  static const Color primaryGreen = Color(0xFF2E8B3A);
-  static const Color lightGreen = Color(0xFF74C043);
-  static const Color canvas = Color(0xFFF4FBF4);
-  static const Color cardWhite = Colors.white;
-  static const Color muted = Color(0xFF6B6B6B);
+  // Removed hardcoded color constants
 
   // Example contact values (replace with real ones)
   final String supportPhone = '+919999999999';
-  final String supportWhatsapp = '918767258243';
+  final String supportWhatsapp = '918767258243'; // WhatsApp numbers require country code without '+'
   final String supportEmail = 'abccompany@gmail.com';
   final String supportLocationQuery = 'Qutb Minar, Delhi';
 
@@ -115,21 +112,25 @@ class _ContactUsPageState extends State<ContactUsPage> {
     super.dispose();
   }
 
+  // --- SUBMIT LOGIC (Theme Compliant Dialog) ---
   void _submitForm() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     if (_formKey.currentState!.validate()) {
-      // In a real app you'd send this to backend
       showDialog(
         context: context,
         builder: (dCtx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          backgroundColor: theme.cardColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
-              const Icon(Icons.check_circle, color: primaryGreen),
+              Icon(Icons.check_circle, color: colorScheme.primary),
               const SizedBox(width: 10),
-              const Expanded(child: Text("Message Sent!", style: TextStyle(fontWeight: FontWeight.w700))),
+              Expanded(child: Text("Message Sent!", style: theme.textTheme.titleMedium)),
             ],
           ),
-          content: const Text("We’ll respond within 24 hours. Thank you!"),
+          content: Text("We’ll respond within 24 hours. Thank you!", style: theme.textTheme.bodyMedium),
           actions: [
             TextButton(
               onPressed: () {
@@ -138,7 +139,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
                 emailCtrl.clear();
                 msgCtrl.clear();
               },
-              child: Text("OK", style: TextStyle(color: primaryGreen, fontWeight: FontWeight.w700)),
+              child: Text("OK", style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -146,22 +147,28 @@ class _ContactUsPageState extends State<ContactUsPage> {
     }
   }
 
+  // --- HELPER WIDGETS (Theme Compliant) ---
+
   Widget _quickAction({
     required String label,
     required IconData icon,
-    required Color color,
+    required Color color, // Primary color for the icon avatar
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        width: 152,
+        width: 152, // Fixed width for nice grid structure
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
         decoration: BoxDecoration(
-          color: cardWhite,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 4))],
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: colorScheme.onSurface.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 4))],
+          border: Border.all(color: colorScheme.onSurface.withOpacity(0.1), width: 0.5),
         ),
         child: Row(
           children: [
@@ -169,11 +176,11 @@ class _ContactUsPageState extends State<ContactUsPage> {
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 4),
                 Text(
                   "Tap to open",
-                  style: TextStyle(color: muted, fontSize: 12),
+                  style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withOpacity(0.6)),
                 ),
               ]),
             )
@@ -191,20 +198,24 @@ class _ContactUsPageState extends State<ContactUsPage> {
     String? Function(String?)? validator,
     TextInputType? keyboardType,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return TextFormField(
       controller: ctrl,
       validator: validator,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      // Rely on theme InputDecorationTheme, but override icon color
       decoration: InputDecoration(
-        filled: true,
-        fillColor: cardWhite,
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.black45),
-        prefixIcon: Icon(icon, color: primaryGreen),
-        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        prefixIcon: Icon(icon, color: colorScheme.primary),
+        // Overrides the theme's default fill color to ensure contrast if needed
+        fillColor: theme.inputDecorationTheme.fillColor, 
+        // Ensure that text field padding is consistent across the app
+        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12), 
       ),
+      style: theme.textTheme.bodyLarge,
     );
   }
 
@@ -216,215 +227,213 @@ class _ContactUsPageState extends State<ContactUsPage> {
     );
   }
 
+  // --- BUILD METHOD ---
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isWide = MediaQuery.of(context).size.width > 760;
+
     return Scaffold(
-      backgroundColor: canvas,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: primaryGreen,
+        // Use primary color for App Bar (makes it vibrant in light mode, dark in dark mode)
+        backgroundColor: colorScheme.primary, 
         elevation: 0,
-        title: Row(
-          children: const [
-            Icon(Icons.eco, color: Colors.white),
-            SizedBox(width: 10),
-            Text('CropCareAI', style: TextStyle(fontWeight: FontWeight.w800)),
-          ],
-        ),
+           title:   Text('CropCareAI', style: theme.textTheme.titleLarge?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w800)),
+       
         centerTitle: false,
         actions: [
           IconButton(
             tooltip: 'Call support',
             onPressed: () => launchServices.launchCall(supportPhone),
-            icon: const Icon(Icons.phone, color: Colors.white),
+            icon: Icon(Icons.phone, color: colorScheme.onPrimary),
           )
         ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(horizontal: isWide ? 40 : 20, vertical: 20),
+          padding: EdgeInsets.symmetric(horizontal: isWide ? 40 : 24, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Hero card with friendly intro
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: cardWhite,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 6))],
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(color: lightGreen.withOpacity(0.12), shape: BoxShape.circle),
-                      child: const Icon(Icons.support_agent, color: lightGreen, size: 28),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Text('Need help with your crop?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Contact our support team — quick, friendly, and simple. Choose a contact method below or write to us.',
-                          style: TextStyle(color: muted),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(spacing: 8, runSpacing: 8, children: [
-                          Chip(
-                            label: const Text('Support: 24h'),
-                            avatar: const Icon(Icons.timer, size: 18),
-                            backgroundColor: lightGreen.withOpacity(0.12),
+              Card(
+                color: theme.cardColor,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                elevation: 6,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(color: colorScheme.secondary.withOpacity(0.12), shape: BoxShape.circle),
+                        child: Icon(Icons.support_agent, color: colorScheme.secondary, size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('Need help with your crop?', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Contact our support team — quick, friendly, and simple. Choose a contact method below or write to us.',
+                            style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
                           ),
-                          Chip(
-                            label: const Text('Local advisors'),
-                            avatar: const Icon(Icons.person_pin, size: 18),
-                            backgroundColor: lightGreen.withOpacity(0.08),
-                          ),
-                          Chip(
-                            label: const Text('Fast replies'),
-                            avatar: const Icon(Icons.flash_on, size: 18),
-                            backgroundColor: lightGreen.withOpacity(0.08),
-                          ),
-                        ])
-                      ]),
-                    )
-                  ],
+                          const SizedBox(height: 12),
+                          // Chips (using theme colors)
+                          Wrap(spacing: 8, runSpacing: 8, children: [
+                            Chip(
+                              label: const Text('Support: 24h'),
+                              avatar: Icon(Icons.timer, size: 18, color: colorScheme.onSurface),
+                              backgroundColor: colorScheme.surfaceVariant,
+                              labelStyle: theme.textTheme.bodySmall,
+                            ),
+                            Chip(
+                              label: const Text('Fast replies'),
+                              avatar: Icon(Icons.flash_on, size: 18, color: colorScheme.secondary),
+                              backgroundColor: colorScheme.secondary.withOpacity(0.2),
+                              labelStyle: theme.textTheme.bodySmall,
+                            ),
+                          ])
+                        ]),
+                      )
+                    ],
+                  ),
                 ),
               ),
 
-              const SizedBox(height: 22),
-
-              // Quick actions grid
-              Text('Quick actions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: primaryGreen)),
-              const SizedBox(height: 12),
-              Wrap(
-  spacing: 12,
-  runSpacing: 12,
-  children: [
-    _quickAction(
-      label: "Call",
-      icon: Icons.phone_rounded,
-      color: primaryGreen,
-      onTap: () => launchServices.launchCall(supportPhone),
-    ),
-    _quickAction(
-      label: "WhatsApp",
-      icon: Icons.chat_bubble_rounded,
-      color: const Color(0xFF25D366),
-      onTap: () => launchServices.launchWhatsapp(
-        supportWhatsapp,
-        text: 'Hello Support Team',
-      ),
-    ),
-    _quickAction(
-      label: "Email",
-      icon: Icons.email_outlined,
-      color: Colors.blue,
-      onTap: () => launchServices.launchEmail(
-        supportEmail,
-        subject: 'Support request',
-        body: '',
-      ),
-    ),
-    _quickAction(
-      label: "Location",
-      icon: Icons.location_on_outlined,
-      color: Colors.redAccent,
-      onTap: () => launchServices.launchMaps(supportLocationQuery),
-    ),
-  ],
-),
-
               const SizedBox(height: 28),
 
-              // Form card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: cardWhite,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Write to us', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: primaryGreen)),
-                    const SizedBox(height: 12),
-                    Form(
-                      key: _formKey,
-                      child: Column(
-                       children: [
-  _inputField(
-    hint: "Full Name",
-    icon: Icons.person_outline,
-    ctrl: nameCtrl,
-    validator: (String? v) {
-      if (v == null || v.trim().length < 2) return "Enter name";
-      return null;
-    },
-  ),
-  const SizedBox(height: 12),
-
-  _inputField(
-    hint: "Email Address",
-    icon: Icons.email_outlined,
-    ctrl: emailCtrl,
-    keyboardType: TextInputType.emailAddress,
-    validator: (String? v) {
-      if (v == null || !v.contains("@")) return "Enter valid email";
-      return null;
-    },
-  ),
-  const SizedBox(height: 12),
-
-  _inputField(
-    hint: "Your Message",
-    icon: Icons.message_outlined,
-    ctrl: msgCtrl,
-    maxLines: 5,
-    validator: (String? v) {
-      if (v == null || v.trim().length < 8) return "Message too short";
-      return null;
-    },
-  ),
-  const SizedBox(height: 18),
-
-  SizedBox(
-    width: double.infinity,
-    child: ElevatedButton(
-      onPressed: _submitForm,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: primaryGreen,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: const Text('Send Message', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-    ),
-  ),
-],
-
-                      ),
+              // Quick actions grid header
+              Text('Quick actions', style: theme.textTheme.titleLarge?.copyWith(color: colorScheme.onBackground, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 16),
+              
+              // Quick actions grid
+              Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  _quickAction(
+                    label: "Call",
+                    icon: Icons.phone_rounded,
+                    color: colorScheme.primary, // Use theme primary
+                    onTap: () => launchServices.launchCall(supportPhone),
+                  ),
+                  _quickAction(
+                    label: "WhatsApp",
+                    icon: Icons.chat_bubble_rounded,
+                    color: const Color(0xFF25D366), // Standard WhatsApp Green
+                    onTap: () => launchServices.launchWhatsapp(
+                      supportWhatsapp,
+                      text: 'Hello Support Team',
                     ),
-                  ],
+                  ),
+                  _quickAction(
+                    label: "Email",
+                    icon: Icons.email_outlined,
+                    color: Colors.blue.shade700, // Standard Email Blue
+                    onTap: () => launchServices.launchEmail(
+                      supportEmail,
+                      subject: 'Support request',
+                      body: '',
+                    ),
+                  ),
+                  _quickAction(
+                    label: "Location",
+                    icon: Icons.location_on_outlined,
+                    color: colorScheme.error, // Use theme error color (Red)
+                    onTap: () => launchServices.launchMaps(supportLocationQuery),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 36),
+
+              // Form card header
+              Text('Write to us', style: theme.textTheme.titleLarge?.copyWith(color: colorScheme.onBackground, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 16),
+              
+              // Contact form
+              Card(
+                color: theme.cardColor,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                elevation: 6,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _inputField(
+                          hint: "Full Name",
+                          icon: Icons.person_outline,
+                          ctrl: nameCtrl,
+                          validator: (String? v) {
+                            if (v == null || v.trim().length < 2) return "Enter name";
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        _inputField(
+                          hint: "Email Address",
+                          icon: Icons.email_outlined,
+                          ctrl: emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (String? v) {
+                            if (v == null || !v.contains("@")) return "Enter valid email";
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        _inputField(
+                          hint: "Your Message",
+                          icon: Icons.message_outlined,
+                          ctrl: msgCtrl,
+                          maxLines: 5,
+                          validator: (String? v) {
+                            if (v == null || v.trim().length < 8) return "Message too short";
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _submitForm,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: colorScheme.primary,
+                              foregroundColor: colorScheme.onPrimary,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 3,
+                            ),
+                            child: Text('Send Message', style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w800)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
 
               const SizedBox(height: 28),
 
               // Social follow row
-              Center(child: Text('Follow us', style: TextStyle(color: primaryGreen, fontWeight: FontWeight.w800, fontSize: 16))),
+              Center(child: Text('Follow us on social media', style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.onBackground, fontWeight: FontWeight.w800))),
               const SizedBox(height: 14),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                _socialButton(Icons.facebook, 'https://facebook.com', Colors.blue),
+                _socialButton(Icons.facebook, 'https://facebook.com', Colors.blue.shade700),
                 const SizedBox(width: 18),
-                _socialButton(Icons.camera_alt, 'https://instagram.com', Colors.pink),
+                _socialButton(Icons.camera_alt, 'https://instagram.com', Colors.pink.shade700),
                 const SizedBox(width: 18),
-                _socialButton(Icons.play_circle_fill, 'https://youtube.com', Colors.red),
+                _socialButton(Icons.play_circle_fill, 'https://youtube.com', Colors.red.shade700),
               ]),
 
               const SizedBox(height: 36),

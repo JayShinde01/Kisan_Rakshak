@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:demo/main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -252,6 +253,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     String action = entry?.action ?? 'water';
     String repeat = entry?.repeat ?? 'none';
     DateTime selectedDateTime = entry?.dateTime ?? DateTime.now().add(const Duration(hours: 1));
+    final theme = Theme.of(context);
 
     await showDialog(
       context: context,
@@ -264,6 +266,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               initialDate: selectedDateTime,
               firstDate: DateTime.now().subtract(const Duration(days: 365)),
               lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+              builder: (c, child) => Theme(
+                data: theme.copyWith(
+                  colorScheme: theme.colorScheme,
+                ),
+                child: child ?? const SizedBox.shrink(),
+              ),
             );
             if (pickedDate == null) return;
             final TimeOfDay? pickedTime = await showTimePicker(
@@ -282,7 +290,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           }
 
           return AlertDialog(
-            title: Text(isEdit ? 'Edit Schedule' : 'New Schedule'),
+            title: Text(isEdit ? 'Edit Schedule' : 'New Schedule', style: theme.textTheme.titleLarge),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -290,14 +298,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   // Title
                   TextFormField(
                     controller: titleCtrl,
-                    decoration: const InputDecoration(labelText: 'Title', hintText: 'e.g. Water North Field'),
+                    decoration: InputDecoration(labelText: 'Title', hintText: 'e.g. Water North Field'),
                   ),
                   const SizedBox(height: 12),
 
                   // Action dropdown
                   Row(
                     children: [
-                      const Text('Action:'),
+                      Text('Action:', style: theme.textTheme.bodyMedium),
                       const SizedBox(width: 8),
                       DropdownButton<String>(
                         value: action,
@@ -317,7 +325,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   // Date & Time
                   Row(
                     children: [
-                      const Icon(Icons.schedule, size: 18),
+                      Icon(Icons.schedule, size: 18, color: theme.iconTheme.color),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -339,7 +347,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   // Repeat
                   Row(
                     children: [
-                      const Text('Repeat:'),
+                      Text('Repeat:', style: theme.textTheme.bodyMedium),
                       const SizedBox(width: 8),
                       DropdownButton<String>(
                         value: repeat,
@@ -364,7 +372,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx2), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(ctx2), child: Text('Cancel', style: theme.textTheme.bodyMedium)),
               ElevatedButton(
                 onPressed: () async {
                   final t = titleCtrl.text.trim();
@@ -408,16 +416,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Future<bool> _confirmDelete(ScheduleEntry entry) async {
+    final theme = Theme.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete schedule'),
-        content: Text('Remove "${entry.title}"?'),
+        title: Text('Delete schedule', style: theme.textTheme.titleLarge),
+        content: Text('Remove "${entry.title}"?', style: theme.textTheme.bodyMedium),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancel', style: theme.textTheme.bodyMedium)),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text('Delete', style: theme.textTheme.bodyMedium?.copyWith(color: Colors.red)),
           ),
         ],
       ),
@@ -493,16 +502,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       return;
     }
 
+    final theme = Theme.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Clear completed'),
-        content: Text('Remove ${completed.length} completed schedule(s)?'),
+        title: Text('Clear completed', style: theme.textTheme.titleLarge),
+        content: Text('Remove ${completed.length} completed schedule(s)?', style: theme.textTheme.bodyMedium),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancel', style: theme.textTheme.bodyMedium)),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Clear', style: TextStyle(color: Colors.red)),
+            child: Text('Clear', style: theme.textTheme.bodyMedium?.copyWith(color: Colors.red)),
           ),
         ],
       ),
@@ -526,16 +536,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Future<void> _clearAll() async {
+    final theme = Theme.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Clear all schedules'),
-        content: const Text('Remove all schedules? This cannot be undone.'),
+        title: Text('Clear all schedules', style: theme.textTheme.titleLarge),
+        content: Text('Remove all schedules? This cannot be undone.', style: theme.textTheme.bodyMedium),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancel', style: theme.textTheme.bodyMedium)),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Clear All', style: TextStyle(color: Colors.red)),
+            child: Text('Clear All', style: theme.textTheme.bodyMedium?.copyWith(color: Colors.red)),
           ),
         ],
       ),
@@ -568,10 +579,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final primary = colorScheme.primary;
+    final onPrimary = colorScheme.onPrimary;
+    final cardColor = theme.cardColor;
+    final canvas = theme.scaffoldBackgroundColor;
+    final iconColor = theme.iconTheme.color;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Schedule'),
-        backgroundColor: Colors.green.shade700,
+        backgroundColor: AgrioDemoApp.primaryGreen,
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) async {
@@ -588,10 +607,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               const PopupMenuItem(value: 'clear_all', child: Text('Clear all')),
               const PopupMenuItem(value: 'export', child: Text('Export (JSON)')),
             ],
-            icon: const Icon(Icons.more_vert),
+            icon: Icon(Icons.more_vert, color: iconColor),
           ),
           IconButton(
-            icon: const Icon(Icons.add_alert_outlined),
+            icon: Icon(Icons.add_alert_outlined, color: iconColor),
             tooltip: 'Add quick watering schedule (tomorrow 7AM)',
             onPressed: () async {
               final quick = ScheduleEntry(
@@ -610,7 +629,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, color: iconColor),
             tooltip: 'Reload',
             onPressed: () => _loadEntries(),
           )
@@ -620,11 +639,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         onPressed: () => _showAddEditDialog(),
         label: const Text('Add'),
         icon: const Icon(Icons.add),
+        backgroundColor: colorScheme.secondary,
+        foregroundColor: colorScheme.onSecondary,
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(color: primary))
           : _entries.isEmpty
-              ? _emptyState()
+              ? _emptyState(theme)
               : Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
                   child: ListView.separated(
@@ -649,25 +670,26 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           child: const Icon(Icons.delete_forever, color: Colors.white),
                         ),
                         child: Card(
+                          color: cardColor,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 2,
                           child: ListTile(
                             contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                            leading: _buildLeadingIcon(e),
-                            title: Text(e.title, style: TextStyle(decoration: e.done ? TextDecoration.lineThrough : null)),
+                            leading: _buildLeadingIcon(e, theme),
+                            title: Text(e.title, style: TextStyle(decoration: e.done ? TextDecoration.lineThrough : null, color: theme.textTheme.bodyLarge?.color)),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const SizedBox(height: 6),
-                                Text(_friendlyDateTime(e.dateTime)),
+                                Text(_friendlyDateTime(e.dateTime), style: theme.textTheme.bodyMedium),
                                 const SizedBox(height: 6),
                                 Row(
                                   children: [
                                     if (e.repeat != 'none')
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
-                                        child: Text(e.repeat.toUpperCase(), style: TextStyle(color: Colors.green.shade800, fontSize: 12, fontWeight: FontWeight.w600)),
+                                        decoration: BoxDecoration(color: primary.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+                                        child: Text(e.repeat.toUpperCase(), style: TextStyle(color: primary.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600)),
                                       ),
                                     const SizedBox(width: 8),
                                     if (e.notes.isNotEmpty) Expanded(child: Text(e.notes, maxLines: 2, overflow: TextOverflow.ellipsis)),
@@ -680,7 +702,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                               children: [
                                 IconButton(
                                   tooltip: 'Edit',
-                                  icon: const Icon(Icons.edit_outlined),
+                                  icon: Icon(Icons.edit_outlined, color: iconColor),
                                   onPressed: () => _showAddEditDialog(entry: e),
                                 ),
                                 const SizedBox(width: 6),
@@ -689,10 +711,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   child: Container(
                                     padding: const EdgeInsets.all(6),
                                     decoration: BoxDecoration(
-                                      color: e.done ? Colors.green.shade700 : Colors.grey.shade200,
+                                      color: e.done ? primary : theme.dividerColor,
                                       shape: BoxShape.circle,
                                     ),
-                                    child: Icon(e.done ? Icons.check : Icons.check_box_outline_blank, color: e.done ? Colors.white : Colors.black54, size: 18),
+                                    child: Icon(e.done ? Icons.check : Icons.check_box_outline_blank, color: e.done ? onPrimary : iconColor, size: 18),
                                   ),
                                 ),
                                 const SizedBox(width: 6),
@@ -713,6 +735,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule duplicated')));
                                     }
                                   },
+                                  icon: Icon(Icons.more_vert, color: iconColor),
                                   itemBuilder: (_) => const [
                                     PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
                                     PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
@@ -733,16 +756,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  Widget _emptyState() {
+  Widget _emptyState(ThemeData theme) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.event_note_outlined, size: 72, color: Colors.green.shade300),
+          Icon(Icons.event_note_outlined, size: 72, color: theme.colorScheme.primary.withOpacity(0.5)),
           const SizedBox(height: 12),
-          const Text('No schedules yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          Text('No schedules yet', style: theme.textTheme.titleLarge?.copyWith(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          const Text('Add watering, spraying or fertilizing schedules that notify you when it\'s time.'),
+          Text('Add watering, spraying or fertilizing schedules that notify you when it\'s time.', style: theme.textTheme.bodyMedium),
           const SizedBox(height: 16),
           ElevatedButton.icon(onPressed: () => _showAddEditDialog(), icon: const Icon(Icons.add), label: const Text('Add schedule')),
         ],
@@ -750,7 +773,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  Widget _buildLeadingIcon(ScheduleEntry e) {
+  Widget _buildLeadingIcon(ScheduleEntry e, ThemeData theme) {
     late IconData icon;
     late Color bg;
     switch (e.action) {

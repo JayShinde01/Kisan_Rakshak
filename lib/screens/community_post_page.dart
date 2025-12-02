@@ -14,23 +14,25 @@ class CommunityPostPage extends StatefulWidget {
 }
 
 class _CommunityPostPageState extends State<CommunityPostPage> {
-  // Palette for agriculture-style UI
-  static const Color primaryGreen = Color(0xFF2E8B3A);
-  static const Color accentGreen = Color(0xFF74C043);
-  static const Color canvas = Color(0xFFF4FBF4);
-  static const Color cardWhite = Colors.white;
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final cardColor = theme.cardColor;
+    final primary = colorScheme.primary;
+    final accent = colorScheme.secondary;
+    final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black87;
+
     return Scaffold(
-      backgroundColor: canvas,
-      
+      backgroundColor: scaffoldBg,
+
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: accentGreen,
-        icon: const Icon(Icons.add, color: Colors.black),
-        label: const Text(
+        backgroundColor: accent,
+        icon: Icon(Icons.add, color: colorScheme.onSecondary),
+        label: Text(
           'Add Post',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+          style: TextStyle(color: colorScheme.onSecondary, fontWeight: FontWeight.w600),
         ),
         onPressed: () {
           Navigator.push(
@@ -39,18 +41,20 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
           );
         },
       ),
+
       body: Column(
         children: [
           // Small header strip under AppBar
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: primaryGreen.withOpacity(0.08),
-            child: const Text(
+            color: primary.withOpacity(0.08),
+            child: Text(
               'Share photos, tips, and questions with other farmers.',
-              style: TextStyle(color: Colors.black87),
+              style: theme.textTheme.bodyMedium?.copyWith(color: textColor),
             ),
           ),
+
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -59,17 +63,17 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                   .snapshots(),
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: primaryGreen),
+                  return Center(
+                    child: CircularProgressIndicator(color: primary),
                   );
                 }
 
                 if (!snap.hasData || snap.data!.docs.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Text(
                       'No posts yet.\nBe the first to share!',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.black54),
+                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.disabledColor),
                     ),
                   );
                 }
@@ -92,22 +96,21 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     );
   }
 
-  Widget _postCard(
-      BuildContext context, String postId, Map<String, dynamic> data) {
+  Widget _postCard(BuildContext context, String postId, Map<String, dynamic> data) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final cardColor = theme.cardColor;
+    final primary = colorScheme.primary;
+
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    final likedBy =
-        (data['likedBy'] as List<dynamic>?)?.cast<String>() ?? <String>[];
-    final savedBy =
-        (data['savedBy'] as List<dynamic>?)?.cast<String>() ?? <String>[];
+    final likedBy = (data['likedBy'] as List<dynamic>?)?.cast<String>() ?? <String>[];
+    final savedBy = (data['savedBy'] as List<dynamic>?)?.cast<String>() ?? <String>[];
     final isLiked = uid != null && likedBy.contains(uid);
     final isSaved = uid != null && savedBy.contains(uid);
     final category = (data['category'] ?? '').toString();
 
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('users')
-          .doc(data['userId'])
-          .get(),
+      future: FirebaseFirestore.instance.collection('users').doc(data['userId']).get(),
       builder: (context, userSnap) {
         final userData = (userSnap.hasData && userSnap.data!.exists)
             ? (userSnap.data!.data() as Map<String, dynamic>)
@@ -118,11 +121,11 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
-            color: cardWhite,
+            color: cardColor,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
+                color: Colors.black.withOpacity(0.04),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -133,18 +136,14 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
             children: [
               // Header row
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Row(
                   children: [
                     CircleAvatar(
                       radius: 22,
-                      backgroundColor: Colors.green.shade100,
-                      backgroundImage:
-                          userPhoto != null ? NetworkImage(userPhoto) : null,
-                      child: userPhoto == null
-                          ? const Icon(Icons.person, color: primaryGreen)
-                          : null,
+                      backgroundColor: colorScheme.primaryContainer,
+                      backgroundImage: userPhoto != null ? NetworkImage(userPhoto) : null,
+                      child: userPhoto == null ? Icon(Icons.person, color: primary) : null,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -153,34 +152,27 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                         children: [
                           Text(
                             userName,
-                            style: const TextStyle(
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             'Shared a post',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 12,
-                            ),
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.disabledColor),
                           ),
                         ],
                       ),
                     ),
                     if (category.isNotEmpty)
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: primaryGreen.withOpacity(0.08),
+                          color: primary.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           category.toUpperCase(),
-                          style: const TextStyle(
-                            color: primaryGreen,
+                          style: TextStyle(
+                            color: primary,
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.5,
@@ -193,8 +185,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
 
               // Image
               ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.zero, bottom: Radius.zero),
+                borderRadius: const BorderRadius.vertical(top: Radius.zero, bottom: Radius.zero),
                 child: AspectRatio(
                   aspectRatio: 4 / 3,
                   child: Image.network(
@@ -203,11 +194,11 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                     fit: BoxFit.cover,
                     errorBuilder: (c, e, st) {
                       return Container(
-                        color: Colors.green.shade50,
-                        child: const Center(
+                        color: colorScheme.surfaceVariant,
+                        child: Center(
                           child: Icon(
                             Icons.broken_image_outlined,
-                            color: Colors.black26,
+                            color: theme.disabledColor,
                             size: 40,
                           ),
                         ),
@@ -219,8 +210,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
 
               // Actions + text
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -230,34 +220,25 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                         IconButton(
                           onPressed: () => toggleLike(postId, isLiked),
                           icon: Icon(
-                            isLiked
-                                ? Icons.favorite
-                                : Icons.favorite_border_rounded,
+                            isLiked ? Icons.favorite : Icons.favorite_border_rounded,
                           ),
-                          color: isLiked ? Colors.red : Colors.grey.shade700,
+                          color: isLiked ? Colors.redAccent : theme.iconTheme.color,
                         ),
                         IconButton(
                           onPressed: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(
-                                builder: (_) => CommentScreen(postId: postId),
-                              ),
+                              MaterialPageRoute(builder: (_) => CommentScreen(postId: postId)),
                             );
                           },
                           icon: const Icon(Icons.mode_comment_outlined),
-                          color: Colors.grey.shade700,
+                          color: theme.iconTheme.color,
                         ),
                         const Spacer(),
                         IconButton(
                           onPressed: () => toggleSave(postId, isSaved),
-                          icon: Icon(
-                            isSaved
-                                ? Icons.bookmark
-                                : Icons.bookmark_border_rounded,
-                          ),
-                          color:
-                              isSaved ? primaryGreen : Colors.grey.shade700,
+                          icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border_rounded),
+                          color: isSaved ? colorScheme.primary : theme.iconTheme.color,
                         ),
                       ],
                     ),
@@ -266,37 +247,27 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                     if (likedBy.isNotEmpty)
                       Text(
                         '${likedBy.length} like${likedBy.length == 1 ? '' : 's'}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
-                        ),
+                        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
                       )
                     else
                       Text(
                         'Be the first to like this',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 13,
-                        ),
+                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.disabledColor),
                       ),
                     const SizedBox(height: 6),
 
                     // Description
                     RichText(
                       text: TextSpan(
+                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.textTheme.bodyMedium?.color) ??
+                            const TextStyle(color: Colors.black87),
                         children: [
                           TextSpan(
                             text: '$userName  ',
-                            style: const TextStyle(
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           TextSpan(
                             text: (data['description'] ?? '').toString(),
-                            style: const TextStyle(
-                              color: Colors.black87,
-                            ),
                           ),
                         ],
                       ),
@@ -308,15 +279,13 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => CommentScreen(postId: postId),
-                          ),
+                          MaterialPageRoute(builder: (_) => CommentScreen(postId: postId)),
                         );
                       },
                       child: Text(
                         'View comments',
                         style: TextStyle(
-                          color: primaryGreen.withOpacity(0.9),
+                          color: primary.withOpacity(0.9),
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -327,10 +296,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                     // Small timestamp placeholder (if you want to add later)
                     Text(
                       'Just now', // TODO: replace with real time formatting if needed
-                      style: TextStyle(
-                        color: Colors.grey.shade500,
-                        fontSize: 11,
-                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.disabledColor),
                     ),
 
                     const SizedBox(height: 8),
@@ -348,8 +314,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final ref =
-        FirebaseFirestore.instance.collection('community_posts').doc(postId);
+    final ref = FirebaseFirestore.instance.collection('community_posts').doc(postId);
 
     if (isLiked) {
       await ref.update({
@@ -366,8 +331,7 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final ref =
-        FirebaseFirestore.instance.collection('community_posts').doc(postId);
+    final ref = FirebaseFirestore.instance.collection('community_posts').doc(postId);
 
     if (isSaved) {
       await ref.update({

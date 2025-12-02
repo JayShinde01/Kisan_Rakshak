@@ -10,6 +10,7 @@ import 'package:demo/screens/field_map_screen.dart';
 import 'package:demo/screens/schedule_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:demo/widgets/theme_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -66,7 +67,6 @@ class _HomeScreenState extends State<HomeScreen> {
       // Drawer
       drawer: _buildAppDrawer(context),
 
-      // App bar with subtle gradient and action
       appBar: AppBar(
   automaticallyImplyLeading: true,
   backgroundColor: primaryGreen,
@@ -81,18 +81,28 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4)],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08), 
+              blurRadius: 4
+            )
+          ],
         ),
         child: const Icon(Icons.eco, color: primaryGreen, size: 20),
       ),
       const SizedBox(width: 12),
-      const Text('CropCareAI', style: TextStyle(fontWeight: FontWeight.w700)),
+      const Text(
+        'CropCareAI', 
+        style: TextStyle(fontWeight: FontWeight.w700),
+      ),
     ],
   ),
 
   actions: [
+    // 🌙 Theme Toggle Button
+    const ThemeToggleButton(),
 
-    // ⭐ Add Schedule Icon here
+    // ⭐ Schedule Button
     IconButton(
       tooltip: "Schedule",
       icon: const Icon(Icons.event_note_outlined, color: Colors.white),
@@ -104,13 +114,14 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     ),
 
-    // Existing Notification Button
+    // 🔔 Notifications
     Padding(
       padding: const EdgeInsets.only(right: 12),
       child: _notificationButton(),
     ),
   ],
 ),
+
 
 
       // --------------------------
@@ -279,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Divider(),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8),
-                    child: Text('Useful', style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.w700)),
+                    child: Text('Useful', style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0), fontWeight: FontWeight.w700)),
                   ),
                   _drawerTile(icon: Icons.help_outline, label: 'Tutorials', onTap: () {}),
                   _drawerTile(icon: Icons.card_giftcard, label: 'Rewards', onTap: () {}),
@@ -325,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _drawerTile({required IconData icon, required String label, required VoidCallback onTap}) {
     return ListTile(
       leading: Icon(icon, color: primaryGreen),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+      title: Text(label, style:  TextStyle(color: const Color.fromARGB(255, 51, 74, 51), fontWeight: FontWeight.w600)),
       onTap: onTap,
       horizontalTitleGap: 6,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),

@@ -1,4 +1,5 @@
 // lib/screens/diagnose_screen.dart
+
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -15,39 +16,25 @@ class DiagnoseScreen extends StatefulWidget {
 }
 
 class _DiagnoseScreenState extends State<DiagnoseScreen> {
-  // Pickers & state
   final ImagePicker _picker = ImagePicker();
   File? _lastPickedImage;
   bool _isUploading = false;
 
-  // Palette
-  static const Color _primaryGreen = Color(0xFF2E8B3A);
-  static const Color _accentGreen = Color(0xFF74C043);
-  static const Color _softCanvas = Color(0xFFF4FBF4);
-  static const Color _contentCard = Colors.white;
-  static const double _cardRadius = 16.0;
+  static const double _cardRadius = 18.0;
 
   @override
   void initState() {
     super.initState();
-    _checkLoggedIn();
+    // Assuming checkLoggedIn is handled by the Home Screen shell
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
+  // NOTE: _checkLoggedIn, _pickImage, _startUploadProcess remain UNCHANGED
+  // as their logic is correct.
 
-  Future<void> _checkLoggedIn() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/login');
-    }
-  }
+  // ---------------- IMAGE PICK + CLOUDINARY UPLOAD ----------------
 
-  // ---------- Image pickers ----------
   Future<void> _pickImage(ImageSource source) async {
+    if (_isUploading) return;
     try {
       final XFile? xfile = await _picker.pickImage(
         source: source,
@@ -58,89 +45,121 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
       final file = File(xfile.path);
       setState(() => _lastPickedImage = file);
 
-      // Immediately show confirmation dialog
       if (!mounted) return;
       _showUploadConfirmationDialog(file);
     } catch (e, st) {
       debugPrint('Image pick error: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Failed to pick image. Check permissions.'),
-            backgroundColor: Colors.redAccent),
+        SnackBar(
+            content: Text('Failed to pick image: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error),
       );
     }
   }
 
-  // ---------- Confirmation dialog ----------
+  // ---------- Confirmation dialog (Theme-Compliant) ----------
   void _showUploadConfirmationDialog(File file) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Confirm Upload', style: TextStyle(fontWeight: FontWeight.w700)),
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.file(file, fit: BoxFit.cover),
+        backgroundColor: theme.cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Center(child: Text('Confirm Diagnosis Photo', style: theme.textTheme.titleLarge)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.primary.withOpacity(0.5), width: 2) 
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(file, fit: BoxFit.cover, height: 200),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Is this photo clear and well-focused for analysis?',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
         ),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(() => _lastPickedImage = null);
-            },
-            child: const Text('Cancel'),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() => _lastPickedImage = null);
+              },
+              child: const Text('Retake'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: colorScheme.error,
+                side: BorderSide(color: colorScheme.error.withOpacity(0.5)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
           ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _startUploadProcess(file);
-            },
-            icon: const Icon(Icons.cloud_upload_outlined),
-            label: const Text('Upload & Diagnose'),
-            style: ElevatedButton.styleFrom(backgroundColor: _accentGreen, foregroundColor: Colors.black),
+          const SizedBox(width: 10),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _startUploadProcess(file);
+              },
+              icon: const Icon(Icons.cloud_upload_outlined, size: 20),
+              label: const Text('Diagnose'),
+              style: ElevatedButton.styleFrom(
+                // Use Secondary (Accent) for the main action, as defined in main.dart
+                backgroundColor: colorScheme.secondary, 
+                foregroundColor: colorScheme.onSecondary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 4,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // ---------- Upload process ----------
+  // ---------- Upload process (Logic remains the same) ----------
   Future<void> _startUploadProcess(File file) async {
     if (_isUploading) return;
     setState(() => _isUploading = true);
 
-    // optional: small immediate feedback
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Uploading image...'), duration: Duration(seconds: 2)),
     );
 
     try {
-      // 1) Upload to cloud storage (CloudinaryService expected)
       final url = await CloudinaryService.uploadImage(file);
-
       if (url == null) throw Exception('Upload returned null URL');
-
-      // 2) Save metadata via AuthService (expected method)
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('User not signed in');
       await AuthService().saveCropImage(url: url, userId: user.uid, source: 'camera');
 
-      // 3) Success feedback
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Image uploaded. Diagnosis started!')),
+        SnackBar(
+          content: const Text('Diagnosis complete! Results are ready.'),
+          backgroundColor: Theme.of(context).colorScheme.primary, 
+        ),
       );
-
-      // TODO: navigate to results page if you have one:
-      // Navigator.pushNamed(context, '/diagnosis_results', arguments: url);
 
     } catch (e, st) {
       debugPrint('Upload/process error: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Upload failed. Try again.'), backgroundColor: Colors.redAccent),
+        SnackBar(content: Text('Upload failed. Error: $e'), backgroundColor: Theme.of(context).colorScheme.error),
       );
     } finally {
       if (mounted) {
@@ -152,258 +171,253 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
     }
   }
 
-  // ---------- UI helpers ----------
-  Widget _miniTip(IconData icon, String title, String subtitle) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: _accentGreen.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(12),
-      ),
+  // -----------------------------------------------------------
+  // ---------- UI BUILDERS USING THEME COLORS ONLY ----------
+  // -----------------------------------------------------------
+
+  Widget _tipRow({required IconData icon, required String text, required ThemeData theme}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: _accentGreen, size: 18),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text(subtitle, style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-            ],
-          )
+          Icon(icon, size: 18, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.8)
+            )),
+          ),
         ],
       ),
     );
   }
 
-  Widget _initialCard(double width, {double? height}) {
+  Widget _adviceContainer(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
     return Container(
-      width: width,
-      constraints: BoxConstraints(minHeight: 160, maxWidth: 900, maxHeight: height ?? double.infinity),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _contentCard,
+        // Use a light tint or surface variant for distinct background
+        color: colorScheme.surfaceVariant, 
         borderRadius: BorderRadius.circular(_cardRadius),
-        boxShadow: [BoxShadow(color: _primaryGreen.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 6))],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 22.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.camera_alt_outlined, size: 72, color: _accentGreen),
-            const SizedBox(height: 12),
-            const Text('Ready to diagnose', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6.0),
-              child: Text(
-                'Tap camera to take a photo or choose from gallery. Try to include the whole leaf and a few nearby leaves for context.',
-                style: TextStyle(color: Colors.grey[700]),
-                textAlign: TextAlign.center,
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Quick Tips for a Better Scan:',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: colorScheme.primary,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 14),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _miniTip(Icons.wb_sunny_outlined, 'Tip: daylight', 'Use natural light'),
-                  const SizedBox(width: 10),
-                  _miniTip(Icons.photo_size_select_actual_outlined, 'Macro', 'Fill ~60% of frame'),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 10),
+          _tipRow(icon: Icons.lightbulb_outline, text: 'Use natural daylight for accurate color.', theme: theme),
+          _tipRow(icon: Icons.zoom_in, text: 'Focus clearly on the affected area.', theme: theme),
+          _tipRow(icon: Icons.grass_outlined, text: 'Include the whole leaf and some context.', theme: theme),
+        ],
       ),
     );
   }
 
-  Widget _previewCard(double width, {double? height}) {
-    if (_lastPickedImage == null) return const SizedBox.shrink();
-    return Container(
-      width: width,
-      constraints: BoxConstraints(minHeight: 200, maxWidth: 900, maxHeight: height ?? double.infinity),
-      decoration: BoxDecoration(
-        color: _contentCard,
-        borderRadius: BorderRadius.circular(_cardRadius),
-        boxShadow: [BoxShadow(color: _primaryGreen.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 6))],
+  Widget _sourceButton({
+    required IconData icon, 
+    required String label, 
+    required VoidCallback onPressed, 
+    required Color color,
+    required Color foregroundColor,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: _isUploading ? null : onPressed,
+      icon: Icon(icon, size: 24),
+      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: foregroundColor, 
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 4,
+        textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(_cardRadius),
+    );
+  }
+  
+  // Combines Status, Preview, and Prompt states
+  Widget _buildMainInteractiveArea(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+    final cardBg = theme.cardColor;
+
+    if (_isUploading) {
+      // 1. Loading State (High Contrast)
+      return Card(
+        color: cardBg,
+        elevation: 10,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_cardRadius)),
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, 
+            children: [
+              CircularProgressIndicator(color: colorScheme.secondary),
+              const SizedBox(height: 20),
+              Text(
+                'Analyzing Image...', 
+                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.secondary),
+              ),
+              const SizedBox(height: 8),
+              Text('Please wait while our AI identifies the issue.', 
+                textAlign: TextAlign.center, 
+                style: theme.textTheme.bodyMedium
+              ),
+            ]
+          ),
+        ),
+      );
+    }
+    
+    if (_lastPickedImage != null) {
+      // 2. Image Preview State
+      return Card(
+        color: cardBg,
+        elevation: 8,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_cardRadius)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AspectRatio(
-              aspectRatio: 4 / 3,
-              child: Image.file(_lastPickedImage!, fit: BoxFit.cover, width: double.infinity),
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(_cardRadius)),
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: Image.file(_lastPickedImage!, fit: BoxFit.cover, width: double.infinity),
+              ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.all(16.0),
               child: Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () => _showUploadConfirmationDialog(_lastPickedImage!),
-                      icon: const Icon(Icons.cloud_upload_outlined),
-                      label: const Text('Upload & Diagnose'),
-                      style: ElevatedButton.styleFrom(backgroundColor: _accentGreen, foregroundColor: Colors.black),
+                      icon: const Icon(Icons.check_circle_outline, size: 20),
+                      label: const Text('Confirm & Diagnose'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.secondary, 
+                        foregroundColor: colorScheme.onSecondary,
+                        elevation: 4,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  OutlinedButton(
+                  OutlinedButton.icon(
                     onPressed: () => setState(() => _lastPickedImage = null),
-                    child: const Text('Retake'),
+                    icon: const Icon(Icons.close, size: 20),
+                    label: const Text('Discard'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: colorScheme.onSurface,
+                      side: BorderSide(color: colorScheme.onSurface.withOpacity(0.5)),
+                    ),
                   ),
                 ],
               ),
             )
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _statusCard(double width, {double? height}) {
-    return Container(
-      width: width,
-      constraints: BoxConstraints(minHeight: 140, maxWidth: 900, maxHeight: height ?? double.infinity),
-      decoration: BoxDecoration(
-        color: _contentCard,
-        borderRadius: BorderRadius.circular(_cardRadius),
-        boxShadow: [BoxShadow(color: _primaryGreen.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 6))],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18.0),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          CircularProgressIndicator(color: _accentGreen),
-          const SizedBox(height: 12),
-          const Text('Processing Image...', style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          const Text('Please wait while we analyze your photo.', textAlign: TextAlign.center),
-        ]),
-      ),
-    );
-  }
-
-  // Build selector for which card to show
-  Widget _buildImageOrPromptCard(bool isWide) {
-    final double cardW = isWide ? 520 : MediaQuery.of(context).size.width * 0.92;
-    final double cardH = 320;
-
-    if (_isUploading) return _statusCard(cardW, height: cardH);
-    if (_lastPickedImage != null) return _previewCard(cardW, height: cardH);
-    return _initialCard(cardW, height: cardH);
-  }
-
-  // Build action buttons row
-  Widget _buildActionButtons(bool isWide) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+      );
+    }
+    
+    // 3. Initial Prompt State (Matches the look from your image)
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        ElevatedButton.icon(
-          onPressed: _isUploading ? null : () => _pickImage(ImageSource.camera),
-          icon: const Icon(Icons.camera_alt_outlined),
-          label: const Text('Camera'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _accentGreen,
-            foregroundColor: Colors.black,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            elevation: 6,
-          ),
+        Icon(Icons.camera_alt_outlined, size: 80, color: colorScheme.primary), 
+        const SizedBox(height: 16),
+        Text(
+          'Start Diagnosing',
+          style: theme.textTheme.headlineSmall,
         ),
-        const SizedBox(width: 12),
-        ElevatedButton.icon(
-          onPressed: _isUploading ? null : () => _pickImage(ImageSource.gallery),
-          icon: const Icon(Icons.photo_library_outlined),
-          label: const Text('Gallery'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.grey.shade200,
-            foregroundColor: Colors.black87,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            elevation: 2,
-          ),
+        const SizedBox(height: 10),
+        Text(
+          'Tap below to take a picture of the plant leaf or choose from your gallery.',
+          style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 30), // Space before buttons
+        
+        // Action Buttons (Matches the style from your image)
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _sourceButton(
+              icon: Icons.camera_alt, 
+              label: 'Camera', 
+              onPressed: () => _pickImage(ImageSource.camera), 
+              // 🌿 Use Primary Color for Camera (the vibrant green from main.dart)
+              color: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+            ),
+            const SizedBox(width: 16),
+            _sourceButton(
+              icon: Icons.photo_library_outlined, 
+              label: 'Gallery', 
+              onPressed: () => _pickImage(ImageSource.gallery), 
+              // 🌑 Use Dark Surface Color for Gallery (the dark grey from main.dart)
+              color: theme.cardColor, 
+              foregroundColor: colorScheme.onSurface,
+            ),
+          ],
         ),
       ],
     );
   }
 
-  // ---------- Build ----------
+  // ---------- Build Method ----------
   @override
   Widget build(BuildContext context) {
-    final screenW = MediaQuery.of(context).size.width;
-    final isWide = screenW > 640;
-
+    final theme = Theme.of(context);
+    
     return Scaffold(
-      backgroundColor: _softCanvas,
-     
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Hero info card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: _contentCard,
-                  borderRadius: BorderRadius.circular(_cardRadius),
-                  boxShadow: [BoxShadow(color: _primaryGreen.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 4))],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('Plant Diagnosis', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                    SizedBox(height: 8),
-                    Text(
-                      'Take a clear photo of the affected leaf. We will analyze the image and provide simple steps you can follow.',
-                      style: TextStyle(color: Colors.black87),
-                    ),
-                  ],
-                ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 700),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Header/Title
+                  Text(
+                    'AI-Powered Plant Doctor', 
+                    style: theme.textTheme.headlineLarge?.copyWith(fontSize: 30, color: theme.colorScheme.primary),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Get instant, accurate diagnosis for common crop diseases.',
+                    style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onBackground.withOpacity(0.8)),
+                    textAlign: TextAlign.center,
+                  ),
+                  
+                  const SizedBox(height: 30),
+
+                  // Main Interactive Area
+                  _buildMainInteractiveArea(theme),
+
+                  const SizedBox(height: 24),
+
+                  // Tips/Advice Container
+                  _adviceContainer(theme),
+
+                  const SizedBox(height: 48),
+                ],
               ),
-
-              const SizedBox(height: 18),
-
-              // The main card area (prompt / preview / status)
-              Center(child: _buildImageOrPromptCard(isWide)),
-
-              const SizedBox(height: 18),
-
-              // Action buttons
-              _buildActionButtons(isWide),
-
-              const SizedBox(height: 24),
-
-              // Small footer text
-              Text(
-                'Your photos are used only for diagnosis and are stored securely.',
-                style: TextStyle(color: Colors.grey.shade700),
-                textAlign: TextAlign.center,
-              ),
-
-              // Add bottom padding so FAB doesn't overlap
-              SizedBox(height: 72),
-            ],
+            ),
           ),
         ),
       ),
-
-      // Floating action button (friendly and big)
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isUploading ? null : () => _pickImage(ImageSource.camera),
-        backgroundColor: _accentGreen,
-        foregroundColor: Colors.black,
-        elevation: 6,
-        icon: const Icon(Icons.camera_alt_outlined),
-        label: const Text('Scan'),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }

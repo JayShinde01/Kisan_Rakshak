@@ -1,4 +1,5 @@
 // lib/screens/notification.dart
+import 'package:demo/main.dart';
 import 'package:flutter/material.dart';
 
 class NotificationPage extends StatefulWidget {
@@ -9,12 +10,7 @@ class NotificationPage extends StatefulWidget {
 }
 
 class _NotificationPageState extends State<NotificationPage> {
-  // App palette
-  static const Color primaryGreen = Color(0xFF2E8B3A);
-  static const Color accentGreen = Color(0xFF74C043);
-  static const Color offWhite = Color(0xFFF6FBF6);
-  static const Color cardBg = Colors.white;
-
+  // Sample notifications (replace with real source if needed)
   List<Map<String, dynamic>> notifications = [
     {"id": "n1", "title": "Payment received successfully!", "type": "success", "time": "2 min ago", "isRead": false},
     {"id": "n2", "title": "New system update available", "type": "update", "time": "10 min ago", "isRead": false},
@@ -49,7 +45,8 @@ class _NotificationPageState extends State<NotificationPage> {
     }
   }
 
-  Color _colorFor(String type) {
+  Color _colorFor(String type, ThemeData theme) {
+    // Use theme-aware colors where possible; fall back to tints
     switch (type) {
       case "success":
         return Colors.green.shade600;
@@ -66,7 +63,7 @@ class _NotificationPageState extends State<NotificationPage> {
       case "warning":
         return Colors.red.shade600;
       default:
-        return Colors.grey.shade600;
+        return theme.iconTheme.color ?? Colors.grey.shade600;
     }
   }
 
@@ -88,15 +85,16 @@ class _NotificationPageState extends State<NotificationPage> {
     setState(() {
       notifications.removeAt(index);
     });
+    final theme = Theme.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Notification dismissed'),
         action: SnackBarAction(
           label: 'Undo',
-          textColor: primaryGreen,
+          textColor: theme.colorScheme.primary,
           onPressed: () {
             setState(() {
-              // try to insert back where it was (simple strategy: add to top)
+              // simple: add back at top
               notifications.insert(0, removed);
             });
           },
@@ -107,20 +105,25 @@ class _NotificationPageState extends State<NotificationPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final cardBg = theme.cardColor;
+    final iconColor = theme.iconTheme.color ?? Colors.grey.shade700;
     final filtered = showOnlyUnread ? notifications.where((n) => n['isRead'] == false).toList() : notifications;
     final unreadCount = notifications.where((n) => n['isRead'] == false).length;
 
     return Scaffold(
-      backgroundColor: offWhite,
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
-        backgroundColor: primaryGreen,
-        elevation: 2,
-        title: const Text('Notifications', style: TextStyle(fontWeight: FontWeight.w700)),
+        backgroundColor: AgrioDemoApp.primaryGreen,
+        elevation: theme.appBarTheme.elevation ?? 2,
+        title: Text('Notifications', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
         actions: [
           IconButton(
             onPressed: _markAllRead,
             tooltip: 'Mark all as read',
-            icon: const Icon(Icons.mark_email_read_rounded),
+            icon: Icon(Icons.mark_email_read_rounded, color: iconColor),
           ),
           PopupMenuButton<String>(
             onSelected: (v) {
@@ -129,12 +132,13 @@ class _NotificationPageState extends State<NotificationPage> {
                 setState(() => notifications.clear());
               }
             },
+            icon: Icon(Icons.more_vert, color: iconColor),
             itemBuilder: (_) => [
               PopupMenuItem(
                 value: 'filter',
                 child: Row(
                   children: [
-                    Checkbox(value: showOnlyUnread, onChanged: (_) {}, activeColor: primaryGreen),
+                    Checkbox(value: showOnlyUnread, onChanged: (_) {}, activeColor: colorScheme.primary),
                     const SizedBox(width: 6),
                     const Expanded(child: Text('Show only unread')),
                   ],
@@ -150,13 +154,13 @@ class _NotificationPageState extends State<NotificationPage> {
             padding: const EdgeInsets.only(bottom: 12.0),
             child: Text(
               unreadCount > 0 ? '$unreadCount unread' : 'You are all caught up',
-              style: const TextStyle(color: Colors.white70),
+              style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onPrimary.withOpacity(0.9)),
             ),
           ),
         ),
       ),
       body: filtered.isEmpty
-          ? _buildEmptyState(context)
+          ? _buildEmptyState(context, theme, colorScheme)
           : ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               itemCount: filtered.length,
@@ -167,10 +171,10 @@ class _NotificationPageState extends State<NotificationPage> {
                 final time = n['time'] as String;
                 final type = n['type'] as String;
                 final isRead = n['isRead'] as bool;
-                final color = _colorFor(type);
+                final color = _colorFor(type, theme);
                 final icon = _iconFor(type);
 
-                // We need the original index in notifications to remove correctly
+                // Need original index in master list to remove correctly
                 final originalIndex = notifications.indexWhere((el) => el['id'] == n['id']);
 
                 return Dismissible(
@@ -218,14 +222,14 @@ class _NotificationPageState extends State<NotificationPage> {
                                 children: [
                                   Text(
                                     title,
-                                    style: TextStyle(
+                                    style: theme.textTheme.bodyMedium?.copyWith(
                                       fontSize: 15,
                                       fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
-                                      color: isRead ? Colors.grey.shade700 : Colors.black87,
+                                      color: isRead ? theme.disabledColor : theme.textTheme.bodyLarge?.color,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  Text(time, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                                  Text(time, style: theme.textTheme.bodySmall?.copyWith(color: theme.disabledColor)),
                                 ],
                               ),
                             ),
@@ -234,7 +238,7 @@ class _NotificationPageState extends State<NotificationPage> {
                             Padding(
                               padding: const EdgeInsets.only(left: 8.0),
                               child: isRead
-                                  ? const Icon(Icons.done, size: 18, color: Colors.grey)
+                                  ? Icon(Icons.done, size: 18, color: theme.disabledColor)
                                   : Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
                             )
                           ],
@@ -249,29 +253,29 @@ class _NotificationPageState extends State<NotificationPage> {
       floatingActionButton: notifications.isNotEmpty
           ? FloatingActionButton.extended(
               onPressed: _markAllRead,
-              label: const Text('Mark all read'),
-              icon: const Icon(Icons.mark_email_read_rounded),
-              backgroundColor: accentGreen,
+              label: Text('Mark all read', style: TextStyle(color: Colors.black),),
+              icon: Icon(Icons.mark_email_read_rounded, color: colorScheme.onSecondary),
+              backgroundColor: colorScheme.secondary,
             )
           : null,
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
+  Widget _buildEmptyState(BuildContext context, ThemeData theme, ColorScheme colorScheme) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.notifications_off, size: 68, color: Colors.grey),
+            Icon(Icons.notifications_off, size: 68, color: theme.disabledColor),
             const SizedBox(height: 16),
-            const Text('No notifications', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            Text('No notifications', style: theme.textTheme.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'You are all caught up. We will show important alerts here — reminders, offers, reports and messages.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54),
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.disabledColor),
             ),
             const SizedBox(height: 18),
             ElevatedButton.icon(
@@ -279,9 +283,9 @@ class _NotificationPageState extends State<NotificationPage> {
                 // placeholder: go to tutorials or help
                 Navigator.pop(context);
               },
-              icon: const Icon(Icons.home_outlined),
-              label: const Text('Go to Home'),
-              style: ElevatedButton.styleFrom(backgroundColor: primaryGreen, foregroundColor: Colors.white),
+              icon: Icon(Icons.home_outlined, color: colorScheme.onPrimary),
+              label: Text('Go to Home', style: theme.textTheme.labelLarge?.copyWith(color: colorScheme.onPrimary)),
+              style: ElevatedButton.styleFrom(backgroundColor: colorScheme.primary),
             ),
           ],
         ),

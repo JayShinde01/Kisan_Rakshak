@@ -43,6 +43,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  // --- PROFILE DATA LOGIC ---
+
   Future<void> _loadProfile() async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -107,6 +109,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
+    final theme = Theme.of(context);
+
     final name = _nameCtrl.text.trim();
     final phone = _phoneCtrl.text.trim();
 
@@ -142,7 +146,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated'), backgroundColor: Colors.green),
+        SnackBar(content: const Text('Profile updated'), backgroundColor: theme.colorScheme.primary),
       );
 
       // reset picked image and progress
@@ -154,7 +158,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       debugPrint('Save profile error: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save profile: ${e.toString()}'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('Failed to save profile: ${e.toString()}'), backgroundColor: theme.colorScheme.error),
         );
       }
     } finally {
@@ -162,44 +166,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // --- UI DIALOGS & HELPERS (Theme Compliant) ---
+
   Future<void> _showImageSourceSheet() async {
+    final theme = Theme.of(context);
+
     showModalBottomSheet(
       context: context,
       builder: (sheetContext) {
-        return SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Choose from gallery'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickImage(ImageSource.gallery);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Take photo'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickImage(ImageSource.camera);
-                },
-              ),
-              if (_pickedImageFile != null)
+        return Container(
+          color: theme.cardColor,
+          child: SafeArea(
+            child: Wrap(
+              children: [
                 ListTile(
-                  leading: const Icon(Icons.delete_outline),
-                  title: const Text('Remove selected image'),
+                  leading: const Icon(Icons.photo_library),
+                  title: Text('Choose from gallery', style: theme.textTheme.bodyLarge),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    setState(() => _pickedImageFile = null);
+                    _pickImage(ImageSource.gallery);
                   },
                 ),
-              ListTile(
-                leading: const Icon(Icons.close),
-                title: const Text('Cancel'),
-                onTap: () => Navigator.pop(sheetContext),
-              ),
-            ],
+                ListTile(
+                  leading: const Icon(Icons.camera_alt),
+                  title: Text('Take photo', style: theme.textTheme.bodyLarge),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _pickImage(ImageSource.camera);
+                  },
+                ),
+                if (_pickedImageFile != null)
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    title: Text('Remove selected image', style: theme.textTheme.bodyLarge?.copyWith(color: Colors.redAccent)),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      setState(() => _pickedImageFile = null);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.close),
+                  title: Text('Cancel', style: theme.textTheme.bodyLarge),
+                  onTap: () => Navigator.pop(sheetContext),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -207,14 +218,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _confirmSignOut() async {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Sign out'),
-        content: const Text('Are you sure you want to sign out?'),
+        backgroundColor: theme.cardColor,
+        title: Text('Sign out', style: theme.textTheme.titleLarge),
+        content: Text('Are you sure you want to sign out?', style: theme.textTheme.bodyMedium),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Sign out')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false), 
+            child: Text('Cancel', style: TextStyle(color: colorScheme.onSurface)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true), 
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colorScheme.error,
+              foregroundColor: colorScheme.onError,
+            ),
+            child: const Text('Sign out'),
+          ),
         ],
       ),
     );
@@ -222,6 +247,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (ok == true) {
       await _auth.signOut();
       if (!mounted) return;
+      // Navigate to the login screen
       Navigator.pushReplacementNamed(context, '/login');
     }
   }
@@ -234,274 +260,267 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return 'Farmer';
   }
 
+  // --- BUILD METHOD ---
+
   @override
   Widget build(BuildContext context) {
     final user = _auth.currentUser;
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-    // Effective avatar widget
+    // Determine avatar widget
     Widget avatarWidget;
     if (_pickedImageFile != null) {
       avatarWidget = ClipOval(child: Image.file(_pickedImageFile!, width: 120, height: 120, fit: BoxFit.cover));
     } else if (user?.photoURL != null) {
-      avatarWidget = ClipOval(child: Image.network(user!.photoURL!, width: 120, height: 120, fit: BoxFit.cover));
+      avatarWidget = ClipOval(child: Image.network(user!.photoURL!, width: 120, height: 120, fit: BoxFit.cover, 
+        // Handle network image errors gracefully with a default icon
+        errorBuilder: (context, error, stackTrace) => Icon(Icons.person, size: 60, color: colorScheme.primary.withOpacity(0.5)),
+      ));
     } else {
-      avatarWidget = const ClipOval(
+      avatarWidget = ClipOval(
         child: SizedBox(
           width: 120,
           height: 120,
-          child: Icon(Icons.person, size: 60, color: Colors.white54),
+          child: Icon(Icons.person, size: 60, color: colorScheme.primary.withOpacity(0.5)),
         ),
       );
     }
 
     return Scaffold(
+      // AppBar uses theme primary color and elevation 0 for modern look
       appBar: AppBar(
-        title: const Text('Profile'),
-        backgroundColor: const Color(0xFF2E8B3A),
+        title: Text('Profile', style: theme.textTheme.titleLarge?.copyWith(color: colorScheme.onSurface)),
+        backgroundColor: colorScheme.surface,
         elevation: 0,
         actions: [
           IconButton(
             onPressed: _confirmSignOut,
-            icon: const Icon(Icons.logout),
+            icon: Icon(Icons.logout, color: colorScheme.error),
             tooltip: 'Sign out',
           )
         ],
       ),
-      backgroundColor: const Color(0xFFF4F9F4), // soft canvas
+      backgroundColor: theme.scaffoldBackgroundColor, // Theme background color
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              children: [
-                // Header card with avatar and brief info
-                Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                    child: Row(
-                      children: [
-                        // avatar & edit
-                        Stack(
-                          alignment: Alignment.bottomRight,
-                          children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.grey.shade200,
-                              ),
-                              child: avatarWidget,
-                            ),
-                            Material(
-                              elevation: 2,
-                              shape: const CircleBorder(),
-                              child: InkWell(
-                                onTap: _showImageSourceSheet,
-                                customBorder: const CircleBorder(),
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
-                                  child: const Icon(Icons.camera_alt, size: 18, color: Color(0xFF2E8B3A)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 16),
-
-                        // name + email
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _effectiveDisplayName(user),
-                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(user?.email ?? '', style: const TextStyle(color: Colors.black54)),
-                              const SizedBox(height: 10),
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: () {
-                                        // quick action: open camera diagnose
-                                        Navigator.pushNamed(context, '/diagnose');
-                                      },
-                                      icon: const Icon(Icons.camera_alt, size: 16),
-                                      label: const Text('Scan Crop'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF74C043),
-                                        foregroundColor: Colors.black,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    OutlinedButton.icon(
-                                      onPressed: () {
-                                        // view saved fields (placeholder)
-                                        Navigator.pushNamed(context, '/fieldmap');
-                                      },
-                                      icon: const Icon(Icons.map, size: 16),
-                                      label: const Text('My Fields'),
-                                      style: OutlinedButton.styleFrom(
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                    )
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                // Edit form card
-                Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 1,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20), // Increased padding
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: Column(
+                children: [
+                  // --- 1. Header Card (Avatar & Quick Actions) ---
+                  Card(
+                    color: theme.cardColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), // Larger radius
+                    elevation: 6,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Name
-                          TextFormField(
-                            controller: _nameCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Full name',
-                              prefixIcon: Icon(Icons.person_outline),
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (v) {
-                              if (v == null || v.trim().length < 2) return 'Please enter your name';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Email (read-only)
-                          TextFormField(
-                            initialValue: user?.email ?? '',
-                            enabled: false,
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              prefixIcon: Icon(Icons.email_outlined),
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Phone
-                          TextFormField(
-                            controller: _phoneCtrl,
-                            keyboardType: TextInputType.phone,
-                            decoration: const InputDecoration(
-                              labelText: 'Phone (optional)',
-                              prefixIcon: Icon(Icons.phone_outlined),
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (v) {
-                              if (v != null && v.isNotEmpty) {
-                                final digits = v.replaceAll(RegExp(r'\D'), '');
-                                if (digits.length < 8) return 'Enter a valid phone';
-                              }
-                              return null;
-                            },
-                          ),
-
-                          const SizedBox(height: 14),
-
-                          // Upload progress UI
-                          if (_uploadProgress > 0 && _uploadProgress < 1)
-                            Column(
-                              children: [
-                                LinearProgressIndicator(value: _uploadProgress),
-                                const SizedBox(height: 8),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Text(
-                                    '${(_uploadProgress * 100).toStringAsFixed(0)}% uploaded',
-                                    style: const TextStyle(fontSize: 12, color: Colors.black54),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                              ],
-                            ),
-
-                          // Save + remove image
-                          Row(
+                          // Avatar & Edit Button
+                          Stack(
+                            alignment: Alignment.bottomRight,
                             children: [
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: _loading ? null : _saveProfile,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF2E8B3A),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: colorScheme.surfaceVariant, // Theme surface variant
+                                ),
+                                child: avatarWidget,
+                              ),
+                              Material(
+                                elevation: 4,
+                                shape: const CircleBorder(),
+                                child: InkWell(
+                                  onTap: _showImageSourceSheet,
+                                  customBorder: const CircleBorder(),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(shape: BoxShape.circle, color: colorScheme.primary),
+                                    child: Icon(Icons.camera_alt, size: 18, color: colorScheme.onPrimary),
                                   ),
-                                  child: _loading
-                                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                      : const Text('Save Profile', style: TextStyle(fontWeight: FontWeight.w700)),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              if (_pickedImageFile != null || user?.photoURL != null)
-                                OutlinedButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      _pickedImageFile = null;
-                                    });
-                                  },
-                                  style: OutlinedButton.styleFrom(
-                                    side: BorderSide(color: Colors.grey.shade300),
-                                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                  child: const Text('Remove photo'),
-                                ),
                             ],
                           ),
+                          const SizedBox(width: 20),
 
-                          const SizedBox(height: 12),
+                          // Name + Email + Quick Actions
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _effectiveDisplayName(user),
+                                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(user?.email ?? 'Guest User', style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withOpacity(0.7))),
+                                const SizedBox(height: 16),
 
-                          // Danger zone: clear profile photo from auth (optional)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton(
-                              onPressed: () async {
-                                final doClear = await showDialog<bool>(
-                                  context: context,
-                                  builder: (dialogContext) => AlertDialog(
-                                    title: const Text('Remove profile photo'),
-                                    content: const Text('This will remove your profile photo from your account. Continue?'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(dialogContext, false),
-                                        child: const Text('Cancel'),
+                                // Quick Actions Row
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      ElevatedButton.icon(
+                                        onPressed: () => Navigator.pushNamed(context, '/diagnose'),
+                                        icon: const Icon(Icons.camera_alt, size: 18),
+                                        label: const Text('Scan Crop'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: colorScheme.secondary,
+                                          foregroundColor: colorScheme.onSecondary,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          elevation: 2,
+                                        ),
                                       ),
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(dialogContext, true),
-                                        child: const Text('Remove'),
-                                      ),
+                                      const SizedBox(width: 10),
+                                      OutlinedButton.icon(
+                                        onPressed: () => Navigator.pushNamed(context, '/fieldmap'),
+                                        icon: Icon(Icons.map_outlined, size: 18, color: colorScheme.primary),
+                                        label: const Text('My Fields'),
+                                        style: OutlinedButton.styleFrom(
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          side: BorderSide(color: colorScheme.primary.withOpacity(0.5)),
+                                          foregroundColor: colorScheme.primary,
+                                        ),
+                                      )
                                     ],
                                   ),
-                                );
+                                ),
+                              ],
+                            ),
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
 
-                                if (doClear == true) {
-                                  try {
+                  const SizedBox(height: 24),
+
+                  // --- 2. Edit Form Card ---
+                  Card(
+                    color: theme.cardColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    elevation: 6,
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Account Details', style: theme.textTheme.titleLarge),
+                            const SizedBox(height: 20),
+
+                            // Name
+                            TextFormField(
+                              controller: _nameCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Full name',
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                              style: theme.textTheme.bodyLarge,
+                              validator: (v) => (v == null || v.trim().length < 2) ? 'Please enter your name' : null,
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Email (read-only)
+                            TextFormField(
+                              initialValue: user?.email ?? '',
+                              enabled: false,
+                              decoration: InputDecoration(
+                                labelText: 'Email (Read-only)',
+                                prefixIcon: const Icon(Icons.email_outlined),
+                                // Ensure disabled field styling is correct
+                                fillColor: colorScheme.surfaceVariant, 
+                              ),
+                              style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface.withOpacity(0.6)),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Phone
+                            TextFormField(
+                              controller: _phoneCtrl,
+                              keyboardType: TextInputType.phone,
+                              decoration: const InputDecoration(
+                                labelText: 'Phone (optional)',
+                                prefixIcon: Icon(Icons.phone_outlined),
+                              ),
+                              style: theme.textTheme.bodyLarge,
+                              validator: (v) => (v != null && v.isNotEmpty && v.replaceAll(RegExp(r'\D'), '').length < 8) ? 'Enter a valid phone' : null,
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // Progress UI
+                            if (_uploadProgress > 0 && _uploadProgress < 1)
+                              Column(
+                                children: [
+                                  LinearProgressIndicator(
+                                    value: _uploadProgress, 
+                                    color: colorScheme.secondary,
+                                    backgroundColor: colorScheme.surfaceVariant,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      '${(_uploadProgress * 100).toStringAsFixed(0)}% uploaded',
+                                      style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                ],
+                              ),
+
+                            // Save Button
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: _loading ? null : _saveProfile,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: colorScheme.primary,
+                                  foregroundColor: colorScheme.onPrimary,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  elevation: 4,
+                                ),
+                                child: _loading
+                                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                    : const Text('Save Profile', style: TextStyle(fontWeight: FontWeight.w700)),
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 24),
+
+                            // Danger Zone: Remove Photo
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton(
+                                onPressed: () async {
+                                  // Simplified logic to remove photo from Auth/DB
+                                  final doClear = await showDialog<bool>(
+                                    context: context,
+                                    builder: (dialogContext) => AlertDialog(
+                                      backgroundColor: theme.cardColor,
+                                      title: Text('Remove Profile Photo', style: theme.textTheme.titleLarge),
+                                      content: Text('This will remove your profile photo from your account. Continue?', style: theme.textTheme.bodyMedium),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text('Cancel', style: TextStyle(color: colorScheme.onSurface))),
+                                        ElevatedButton(
+                                          onPressed: () => Navigator.pop(dialogContext, true), 
+                                          style: ElevatedButton.styleFrom(backgroundColor: colorScheme.error),
+                                          child: const Text('Remove'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (doClear == true) {
                                     final u = _auth.currentUser;
                                     if (u != null) {
                                       await u.updatePhotoURL(null);
@@ -509,54 +528,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       await u.reload();
                                       setState(() {});
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Profile photo removed'), backgroundColor: Colors.green),
+                                        SnackBar(content: const Text('Profile photo removed'), backgroundColor: colorScheme.primary),
                                       );
                                     }
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Failed to remove photo: $e'), backgroundColor: Colors.redAccent),
-                                    );
                                   }
-                                }
-                              },
-                              child: const Text('Remove photo from account', style: TextStyle(color: Colors.redAccent)),
+                                },
+                                child: Text('Remove profile photo from account', style: TextStyle(color: colorScheme.error)),
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // --- 3. Additional Actions Card ---
+                  Card(
+                    color: theme.cardColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    elevation: 6,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: Icon(Icons.shield_outlined, color: colorScheme.secondary),
+                            title: Text('Privacy & Security', style: theme.textTheme.bodyLarge),
+                            subtitle: Text('Manage data permissions and alerts', style: theme.textTheme.bodyMedium),
+                            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                            onTap: () => Navigator.pushNamed(context, '/settings'),
                           ),
+                          const Divider(indent: 16, endIndent: 16),
+                          ListTile(
+                            leading: Icon(Icons.help_outline, color: colorScheme.secondary),
+                            title: Text('Help & Tutorials', style: theme.textTheme.bodyLarge),
+                            subtitle: Text('How to use the app and best practices', style: theme.textTheme.bodyMedium),
+                            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                            onTap: () => Navigator.pushNamed(context, '/help'),
+                          )
                         ],
                       ),
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 18),
-
-                // Additional actions
-                Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.shield),
-                          title: const Text('Privacy & Security'),
-                          subtitle: const Text('Manage data permissions and alerts'),
-                          onTap: () => Navigator.pushNamed(context, '/settings'),
-                        ),
-                        const Divider(),
-                        ListTile(
-                          leading: const Icon(Icons.help_outline),
-                          title: const Text('Help & Tutorials'),
-                          subtitle: const Text('How to use the app and best practices'),
-                          onTap: () => Navigator.pushNamed(context, '/help'),
-                        )
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 28),
-              ],
+                  const SizedBox(height: 30),
+                ],
+              ),
             ),
           ),
         ),
