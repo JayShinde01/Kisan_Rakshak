@@ -1,40 +1,42 @@
 🌾 CropCareAI – Smart Crop Disease Detection (Flutter Web)
+🔗 Live Demo:
 
-Live Demo:
-🔗 https://cropcareai-u7co.onrender.com/
+👉 https://cropcareai-u7co.onrender.com/
 
-CropCareAI is an AI-powered crop health monitoring web application built using Flutter Web. The app allows farmers and agricultural experts to upload crop images and instantly detect possible diseases using machine-learning models. This project aims to empower farmers with quick, reliable plant diagnostics and actionable insights.
+CropCareAI is an AI-powered crop health monitoring web application built using Flutter Web. The app allows farmers to upload crop images and instantly detect diseases using trained machine-learning models.
 
 🚀 Features
 🔍 AI-Based Crop Disease Detection
 
-Upload images of your crop (leaf/plant).
+Upload leaf/plant images
 
-The system analyzes the image and predicts possible diseases.
+AI predicts possible diseases
 
-Provides confidence score and disease name.
+Shows disease name + confidence score
 
 🧠 Deep Learning Integration
 
-The app communicates with a backend model (API) trained for plant disease classification.
+Backend ML API for predictions
 
-Supports popular crops like wheat, rice, maize, and more (based on your model).
+Supports multiple crops (wheat, rice, maize, etc.)
 
-🎨 Built with Flutter
+🎨 Built With Flutter
 
-Clean UI and smooth UX.
+Clean and modern UI
 
-Responsive layout for desktop, tablet, and mobile browsers.
+Responsive across devices
 
-Works without installation — just open the link.
+Runs directly in browser (no installation)
 
 ☁️ Hosted on Render
 
-The app is deployed on Render for stable, free web hosting.
+Stable hosting
 
-Lightweight and optimized for web usage.
+Fast and lightweight
 
-📁 Project Structure (Flutter)
+Optimized for Flutter Web
+
+📁 Project Structure
 lib/
 │── main.dart
 │── screens/
@@ -46,70 +48,64 @@ lib/
 assets/
 web/
 
-🔧 How It Works (Flow Diagram)
-
-User uploads image
-
-Flutter Web → sends to ML API
-
-API processes image using trained model
-
-Returns disease prediction + accuracy
-
-Flutter Web displays results to user
+🔧 How It Works (Flow)
+**User uploads image**
+        ↓
+**Flutter Web** → **Sends image to ML API**
+        ↓
+**API processes image** using trained model
+        ↓
+**Returns prediction + accuracy**
+        ↓
+**Flutter Web displays results**
 
 🛠️ Tech Stack
 Component	Technology
 Frontend	Flutter Web
-Backend (API)	Python / FastAPI / Flask (your choice)
+Backend (API)	Python / FastAPI / Flask
 ML Model	TensorFlow / PyTorch
 Hosting	Render.com
-Storage	Firebase / Cloudinary / Local API (optional)
+Storage	Firebase / Cloudinary / Local server
 ▶️ How to Run Locally
-
-Clone repo
-
+1️⃣ Clone the Repo
 git clone <your-repo-url>
 cd cropcareai
 
-
-Install dependencies
-
+2️⃣ Install Dependencies
 flutter pub get
 
-
-Enable web support
-
+3️⃣ Enable Web Support
 flutter config --enable-web
 
-
-Run the app
-
+4️⃣ Run the App
 flutter run -d chrome
 
 🌐 Deployment (Render)
-
-Your web app is deployed on Render using:
-
+Build Flutter Web
 flutter build web
 
 
-This generates a /build/web folder, which is uploaded to Render’s static site service.
+This generates:
+
+/build/web
+
+
+Upload this folder to Render → Static Site.
 
 📸 Screenshots (Optional)
 
-Add screenshots of your UI here.
+Add your screenshots here.
 
 📞 Contact / Support
 
 If you need help with:
 
-Improving the UI
+Improving UI
 
-Deploying the backend model
+Deploying backend ML model
 
-Making a mobile version (APK)
+Generating APK (Android)
 
 Adding new crop disease models
 
-Feel free to ask me anytime!
+Feel free to ask me anytime! 🚀
