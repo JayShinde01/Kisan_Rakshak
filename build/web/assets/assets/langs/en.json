@@ -52,7 +52,6 @@
   "role_home_grower_desc": "Small plots, home gardens — simple guidance and reminders.",
   "role_selected_title": "Role Selected",
   "role_selected_content": "You selected \"{role}\". You can change this later in settings.",
-  "cancel": "Cancel",
   "welcome_back": "Welcome back — sign in",
   "reset_password_title": "Reset password",
   "enter_email_hint": "Enter your email",
@@ -377,5 +376,15 @@
   "export": "Export",
   "clear_completed_menu": "Clear completed",
   "clear_all_menu": "Clear all",
-  "export_json_menu": "Export (JSON)"
+  "export_json_menu": "Export (JSON)",
+   "class_aphid": "Aphid",
+  "class_brown_rust": "Brown Rust",
+  "class_healthy": "Healthy",
+  "class_leaf_blight": "Leaf Blight",
+  "class_mildew": "Mildew",
+  "class_mite": "Mite",
+  "class_septoria": "Septoria",
+  "class_smut": "Smut",
+  "class_unknown": "Unknown",
+  "class_yellow_rust": "Yellow Rust"
 }

@@ -19,6 +19,11 @@
       "code": "pa",
       "native": "ਪੰਜਾਬੀ",
       "audio": "audio/pa.mp3"
-    }
+    },
+    {
+  "code": "bgc",
+  "native": "हरियाणवी",
+  "audio": "audio/bgc.mp3"
+}
   ]
 }
