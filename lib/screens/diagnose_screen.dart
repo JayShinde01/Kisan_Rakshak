@@ -1,14 +1,18 @@
-// lib/screens/diagnose_screen.dart (Final clean version with Web Image Fix)
+// lib/screens/diagnose_screen.dart
+// Diagnose screen — picks/takes photo, uploads to your model API (/api/predict),
+// displays prediction result and history. Uses ApiConfig.baseUrl if available.
 
+import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart'; // Required for kIsWeb and Uint8List
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart'; // Required for web file picking
-
-import '../services/cloudinary_service.dart';
-import '../services/auth_service.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import '../api_config.dart';
 
 class DiagnoseScreen extends StatefulWidget {
   const DiagnoseScreen({Key? key}) : super(key: key);
@@ -18,220 +22,238 @@ class DiagnoseScreen extends StatefulWidget {
 }
 
 class _DiagnoseScreenState extends State<DiagnoseScreen> {
+  // pickers
   final ImagePicker _picker = ImagePicker();
-  
-  // State variables for cross-platform image storage
-  File? _lastPickedFile; 
-  Uint8List? _lastPickedBytes; // For Web preview and upload
-  String? _lastPickedFileName; 
-  
+
+  // picked data
+  File? _lastPickedFile;
+  Uint8List? _lastPickedBytes;
+  String? _lastPickedFileName;
+
+  // UI state
   bool _isUploading = false;
+  String? _predictionLabel;
+  double? _predictionConfidence;
+  String? _predictionImageUrl; // server saved image URL (may be null)
+  String? _error;
+
+  // history from server (optional)
+  List<Map<String, dynamic>> _history = [];
+
+  // API endpoints (use ApiConfig.baseUrl if available)
+  late final String API_BASE;
+  late final String API_PREDICT;
+  late final String API_HISTORY;
 
   static const double _cardRadius = 18.0;
 
   @override
   void initState() {
     super.initState();
-    // Assuming checkLoggedIn is handled by the Home Screen shell
+    // Use ApiConfig.baseUrl if provided; otherwise fallback to localhost.
+    final base = (ApiConfig.baseUrl != null && ApiConfig.baseUrl!.isNotEmpty)
+        ? ApiConfig.baseUrl!
+        : 'http://localhost:5000';
+    API_BASE = base;
+    API_PREDICT = '$API_BASE/api/predict';
+    API_HISTORY = '$API_BASE/api/history';
+
+    _loadHistory(); // will gracefully handle missing endpoint
   }
 
-  // ---------------- IMAGE PICK + CLOUDINARY UPLOAD ----------------
+  // ---------------- IMAGE PICK + PREVIEW ----------------
 
   Future<void> _pickImage(ImageSource source) async {
     if (_isUploading) return;
-    
-    // Reset previous states
+
     setState(() {
       _lastPickedFile = null;
       _lastPickedBytes = null;
       _lastPickedFileName = null;
+      _error = null;
     });
 
     try {
       if (kIsWeb) {
-        // --- WEB HANDLING: Get raw bytes via FilePicker ---
         final result = await FilePicker.platform.pickFiles(
           type: FileType.image,
           allowMultiple: false,
-          withData: true, 
+          withData: true,
         );
-        if (result == null || result.files.single.bytes == null) return;
-        
-        final file = result.files.single;
-        
+        if (result == null || result.files.isEmpty) return;
+        final picked = result.files.single;
+        if (picked.bytes == null) throw Exception('Failed to read picked file bytes.');
         setState(() {
-          _lastPickedBytes = file.bytes;
-          _lastPickedFileName = file.name;
+          _lastPickedBytes = picked.bytes;
+          _lastPickedFileName = picked.name;
         });
-
       } else {
-        // --- MOBILE/DESKTOP HANDLING: Get File path via ImagePicker ---
         final XFile? xfile = await _picker.pickImage(
           source: source,
           imageQuality: 80,
-          maxWidth: 1200,
+          maxWidth: 1600,
         );
         if (xfile == null) return;
-        
         setState(() {
           _lastPickedFile = File(xfile.path);
           _lastPickedFileName = xfile.name;
         });
       }
 
-      // If either file or bytes were successfully set, show confirmation
       if (!mounted) return;
       if (_lastPickedFile != null || _lastPickedBytes != null) {
         _showUploadConfirmationDialog();
       }
-
     } catch (e, st) {
       debugPrint('Image pick error: $e\n$st');
       if (!mounted) return;
+      setState(() => _error = "Failed to pick image: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Failed to pick image: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error),
+        SnackBar(content: Text('Failed to pick image: $e'), backgroundColor: Theme.of(context).colorScheme.error),
       );
     }
   }
 
-  // ---------- Confirmation dialog (Theme-Compliant) ----------
+  // ---------- Confirmation dialog ----------
   void _showUploadConfirmationDialog() {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    
-    // --- FIX: Use platform-appropriate image widget for dialog preview ---
     final Widget previewWidget;
     if (_lastPickedFile != null) {
-      previewWidget = Image.file(_lastPickedFile!, fit: BoxFit.cover, height: 200);
+      previewWidget = Image.file(_lastPickedFile!, fit: BoxFit.cover, height: 220);
     } else if (_lastPickedBytes != null) {
-      previewWidget = Image.memory(_lastPickedBytes!, fit: BoxFit.cover, height: 200);
+      previewWidget = Image.memory(_lastPickedBytes!, fit: BoxFit.cover, height: 220);
     } else {
-      previewWidget = const SizedBox(height: 200);
+      previewWidget = const SizedBox(height: 220);
     }
-    // --- END FIX ---
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: theme.cardColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Center(child: Text('Confirm Diagnosis Photo', style: theme.textTheme.titleLarge)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Center(child: Text('Confirm Photo', style: theme.textTheme.titleLarge)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colorScheme.primary.withOpacity(0.5), width: 2) 
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: previewWidget,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Is this photo clear and well-focused for analysis?',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium,
-            ),
+            ClipRRect(borderRadius: BorderRadius.circular(12), child: previewWidget),
+            const SizedBox(height: 12),
+            Text('Is the photo clear and focused on the affected area?', textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
           ],
         ),
-        actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         actions: [
-          Expanded(
-            child: OutlinedButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                setState(() {
-                    _lastPickedFile = null;
-                    _lastPickedBytes = null;
-                });
-              },
-              child: const Text('Retake'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: colorScheme.error,
-                side: BorderSide(color: colorScheme.error.withOpacity(0.5)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() {
+                _lastPickedFile = null;
+                _lastPickedBytes = null;
+                _lastPickedFileName = null;
+              });
+            },
+            child: const Text('Retake'),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _startUploadProcess();
-              },
-              icon: const Icon(Icons.cloud_upload_outlined, size: 20),
-              label: const Text('Diagnose'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.secondary, 
-                foregroundColor: colorScheme.onSecondary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 4,
-              ),
-            ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _startUploadProcess();
+            },
+            child: const Text('Diagnose'),
           ),
         ],
       ),
     );
   }
 
-  // ---------- Upload process (CRITICAL: Assuming CloudinaryService supports both File and Bytes) ----------
+  // ---------- Upload to Flask API ----------
   Future<void> _startUploadProcess() async {
-    // Check if we have data ready
-    if (_isUploading || (_lastPickedFile == null && _lastPickedBytes == null)) return;
-    
-    setState(() => _isUploading = true);
+    if (_isUploading) return;
+    if (_lastPickedFile == null && _lastPickedBytes == null) {
+      setState(() => _error = "No image selected.");
+      return;
+    }
+
+    setState(() {
+      _isUploading = true;
+      _predictionLabel = null;
+      _predictionConfidence = null;
+      _predictionImageUrl = null;
+      _error = null;
+    });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Uploading image...'), duration: Duration(seconds: 2)),
+      const SnackBar(content: Text('Uploading image for diagnosis...'), duration: Duration(seconds: 2)),
     );
-    
-    final theme = Theme.of(context);
-    
+
     try {
-      String? url;
-      
-      if (_lastPickedFile != null) {
-        // MOBILE/DESKTOP: Upload the File object
-        // NOTE: The CloudinaryService implementation must handle the "file:" parameter.
-        url = await CloudinaryService.uploadImage(file: _lastPickedFile);
-      } else if (_lastPickedBytes != null) {
-        // WEB: Upload the raw bytes and file name
-        // NOTE: The CloudinaryService implementation must handle "fileBytes:" and "fileName:" parameters.
-        url = await CloudinaryService.uploadImage(
-          fileBytes: _lastPickedBytes,
-          fileName: _lastPickedFileName,
+      final uri = Uri.parse(API_PREDICT);
+      final request = http.MultipartRequest('POST', uri);
+
+      if (kIsWeb) {
+        final bytes = _lastPickedBytes!;
+        final filename = _lastPickedFileName ?? 'upload.jpg';
+        final mimeType = _getMimeTypeFromFilename(filename) ?? 'image/jpeg';
+        final mimeParts = mimeType.split('/');
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            bytes,
+            filename: filename,
+            contentType: MediaType(mimeParts.first, mimeParts.last),
+          ),
         );
+      } else {
+        final file = _lastPickedFile!;
+        final filename = _lastPickedFileName ?? file.path.split(Platform.pathSeparator).last;
+        // include content type automatically by fromPath
+        request.files.add(await http.MultipartFile.fromPath('file', file.path, filename: filename));
       }
 
-      if (url == null) throw Exception('Upload returned null URL');
-      
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('User not signed in');
-      
-      await AuthService().saveCropImage(url: url, userId: user.uid, source: kIsWeb ? 'web' : 'mobile');
+      final streamed = await request.send();
+      final resp = await http.Response.fromStream(streamed);
+
+      if (resp.statusCode != 200) {
+        String details = resp.body;
+        try {
+          final j = json.decode(resp.body);
+          details = j['error'] ?? j['details'] ?? resp.body;
+        } catch (_) {}
+        throw Exception('Server responded ${resp.statusCode}: $details');
+      }
+
+      final Map<String, dynamic> jsonBody = json.decode(resp.body) as Map<String, dynamic>;
+      final result = jsonBody['result'] as String? ?? jsonBody['prediction'] as String?;
+      final confidence = (jsonBody['confidence'] is num) ? (jsonBody['confidence'] as num).toDouble() : (jsonBody['confidence'] is String ? double.tryParse(jsonBody['confidence']) : null);
+      final imageUrl = jsonBody['image_url'] ?? jsonBody['image'] ?? jsonBody['file_url'] ?? jsonBody['filename'];
+
+      setState(() {
+        _predictionLabel = result ?? 'Unknown';
+        _predictionConfidence = confidence ?? 0.0;
+        if (imageUrl == null) {
+          _predictionImageUrl = null;
+        } else if (imageUrl.toString().startsWith('http')) {
+          _predictionImageUrl = imageUrl.toString();
+        } else {
+          // ensure leading slash
+          final s = imageUrl.toString();
+          _predictionImageUrl = s.startsWith('/') ? API_BASE + s : API_BASE + '/' + s;
+        }
+      });
+
+      // try to refresh history but ignore failures
+      await _loadHistory();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Diagnosis complete! Results are ready.'),
-          backgroundColor: theme.colorScheme.primary, 
-        ),
+        SnackBar(content: Text('Diagnosis: ${_predictionLabel ?? "Unknown"} (${_predictionConfidence?.toStringAsFixed(2) ?? "0"}%)')),
       );
-
     } catch (e, st) {
-      debugPrint('Upload/process error: $e\n$st');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed. Error: $e'), backgroundColor: theme.colorScheme.error),
-      );
+      debugPrint('Upload/Prediction error: $e\n$st');
+      setState(() => _error = 'Upload/Prediction failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload/Prediction failed: $e'), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -244,10 +266,51 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
     }
   }
 
-  // -----------------------------------------------------------
-  // ---------- UI BUILDERS USING THEME COLORS ONLY ----------
-  // -----------------------------------------------------------
+  // Helper to guess mime from filename
+  String? _getMimeTypeFromFilename(String name) {
+    final lower = name.toLowerCase();
+    if (!lower.contains('.')) return null;
+    final ext = lower.split('.').last;
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return null;
+    }
+  }
 
+  // ---------- Load server-side history (graceful) ----------
+  Future<void> _loadHistory() async {
+    try {
+      final resp = await http.get(Uri.parse(API_HISTORY)).timeout(const Duration(seconds: 5));
+      if (resp.statusCode != 200) {
+        // history not available — don't treat as fatal
+        setState(() => _history = []);
+        return;
+      }
+      final List<dynamic> raw = json.decode(resp.body) as List<dynamic>;
+      final parsed = raw.map((e) {
+        if (e is Map<String, dynamic>) return e;
+        return Map<String, dynamic>.from(e as Map);
+      }).toList();
+      setState(() {
+        _history = parsed.cast<Map<String, dynamic>>();
+      });
+    } catch (e) {
+      // ignore CORS/404/network errors for history
+      debugPrint('History load error: $e');
+      setState(() => _history = []);
+    }
+  }
+
+  // ---------- UI pieces ----------
   Widget _tipRow({required IconData icon, required String text, required ThemeData theme}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -256,11 +319,7 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
         children: [
           Icon(icon, size: 18, color: theme.colorScheme.primary),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(text, style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.8)
-            )),
-          ),
+          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
         ],
       ),
     );
@@ -270,237 +329,236 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
     final colorScheme = theme.colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceVariant, 
-        borderRadius: BorderRadius.circular(_cardRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Quick Tips for a Better Scan:',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: colorScheme.primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _tipRow(icon: Icons.lightbulb_outline, text: 'Use natural daylight for accurate color.', theme: theme),
-          _tipRow(icon: Icons.zoom_in, text: 'Focus clearly on the affected area.', theme: theme),
-          _tipRow(icon: Icons.grass_outlined, text: 'Include the whole leaf and some context.', theme: theme),
-        ],
-      ),
+      decoration: BoxDecoration(color: colorScheme.surfaceVariant, borderRadius: BorderRadius.circular(_cardRadius)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Quick Tips for a Better Scan:', style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        _tipRow(icon: Icons.lightbulb_outline, text: 'Use natural daylight for accurate color.', theme: theme),
+        _tipRow(icon: Icons.zoom_in, text: 'Focus clearly on the affected area.', theme: theme),
+        _tipRow(icon: Icons.grass_outlined, text: 'Include the whole leaf and some context.', theme: theme),
+      ]),
     );
   }
 
-  Widget _sourceButton({
-    required IconData icon, 
-    required String label, 
-    required VoidCallback onPressed, 
-    required Color color,
-    required Color foregroundColor,
-  }) {
-    return ElevatedButton.icon(
-      onPressed: _isUploading ? null : onPressed,
-      icon: Icon(icon, size: 24),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: foregroundColor, 
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 4,
-        textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-      ),
-    );
-  }
-  
-  // Combines Status, Preview, and Prompt states
   Widget _buildMainInteractiveArea(ThemeData theme) {
     final colorScheme = theme.colorScheme;
     final cardBg = theme.cardColor;
 
     if (_isUploading) {
-      // 1. Loading State (High Contrast)
       return Card(
         color: cardBg,
-        elevation: 10,
+        elevation: 8,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_cardRadius)),
         child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min, 
-            children: [
-              CircularProgressIndicator(color: colorScheme.secondary),
-              const SizedBox(height: 20),
-              Text(
-                'Analyzing Image...', 
-                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.secondary),
-              ),
-              const SizedBox(height: 8),
-              Text('Please wait while our AI identifies the issue.', 
-                textAlign: TextAlign.center, 
-                style: theme.textTheme.bodyMedium
-              ),
-            ]
-          ),
+          padding: const EdgeInsets.all(28.0),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            CircularProgressIndicator(color: colorScheme.secondary),
+            const SizedBox(height: 16),
+            Text('Analyzing Image...', style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.secondary)),
+            const SizedBox(height: 8),
+            Text('Please wait while the model processes the image.', textAlign: TextAlign.center),
+          ]),
         ),
       );
     }
-    
+
     if (_lastPickedFile != null || _lastPickedBytes != null) {
-      // 2. Image Preview State
-      // FIX: Use platform-appropriate image widget
       final Widget previewWidget;
       if (!kIsWeb && _lastPickedFile != null) {
         previewWidget = Image.file(_lastPickedFile!, fit: BoxFit.cover, width: double.infinity);
       } else if (kIsWeb && _lastPickedBytes != null) {
         previewWidget = Image.memory(_lastPickedBytes!, fit: BoxFit.cover, width: double.infinity);
       } else {
-        // Fallback for an unexpected state (e.g., trying to use File on Web)
-        previewWidget = Container(
-          color: colorScheme.surfaceVariant,
-          child: Center(child: Icon(Icons.broken_image, size: 50, color: colorScheme.error)),
-        );
+        previewWidget = Container(color: colorScheme.surfaceVariant, child: Center(child: Icon(Icons.broken_image, size: 50, color: colorScheme.error)));
       }
 
       return Card(
         color: cardBg,
-        elevation: 8,
+        elevation: 6,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_cardRadius)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(_cardRadius)),
-              child: AspectRatio(
-                aspectRatio: 4 / 3,
-                child: previewWidget,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(_cardRadius)), child: AspectRatio(aspectRatio: 4 / 3, child: previewWidget)),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _showUploadConfirmationDialog,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Confirm & Diagnose'),
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _showUploadConfirmationDialog, // Re-show dialog from state
-                      icon: const Icon(Icons.check_circle_outline, size: 20),
-                      label: const Text('Confirm & Diagnose'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colorScheme.secondary, 
-                        foregroundColor: colorScheme.onSecondary,
-                        elevation: 4,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  OutlinedButton.icon(
-                    onPressed: () => setState(() {
-                        _lastPickedFile = null;
-                        _lastPickedBytes = null;
-                    }),
-                    icon: const Icon(Icons.close, size: 20),
-                    label: const Text('Discard'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colorScheme.onSurface,
-                      side: BorderSide(color: colorScheme.onSurface.withOpacity(0.5)),
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: () => setState(() {
+                  _lastPickedFile = null;
+                  _lastPickedBytes = null;
+                  _lastPickedFileName = null;
+                }),
+                icon: const Icon(Icons.close),
+                label: const Text('Discard'),
               ),
-            )
-          ],
-        ),
+            ]),
+          ),
+        ]),
       );
     }
-    
-    // 3. Initial Prompt State (Matches the look from your image)
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.camera_alt_outlined, size: 80, color: colorScheme.primary), 
-        const SizedBox(height: 16),
-        Text(
-          'Start Diagnosing',
-          style: theme.textTheme.headlineSmall,
+
+    // Default initial prompt
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Icon(Icons.camera_alt_outlined, size: 80, color: colorScheme.primary),
+      const SizedBox(height: 16),
+      Text('Start Diagnosing', style: theme.textTheme.headlineSmall),
+      const SizedBox(height: 10),
+      Text('Tap below to take a picture of the plant leaf or choose from your gallery.', textAlign: TextAlign.center),
+      const SizedBox(height: 24),
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        ElevatedButton.icon(
+          onPressed: () => _pickImage(ImageSource.camera),
+          icon: const Icon(Icons.camera_alt),
+          label: const Text('Camera'),
         ),
-        const SizedBox(height: 10),
-        Text(
-          'Tap below to take a picture of the plant leaf or choose from your gallery.',
-          style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
-          textAlign: TextAlign.center,
+        const SizedBox(width: 12),
+        OutlinedButton.icon(
+          onPressed: () => _pickImage(ImageSource.gallery),
+          icon: const Icon(Icons.photo_library_outlined),
+          label: const Text('Gallery'),
         ),
-        const SizedBox(height: 30), // Space before buttons
-        
-        // Action Buttons (Matches the style from your image)
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _sourceButton(
-              icon: Icons.camera_alt, 
-              label: 'Camera', 
-              onPressed: () => _pickImage(ImageSource.camera), 
-              color: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
-            ),
-            const SizedBox(width: 16),
-            _sourceButton(
-              icon: Icons.photo_library_outlined, 
-              label: 'Gallery', 
-              onPressed: () => _pickImage(ImageSource.gallery), 
-              color: theme.cardColor, 
-              foregroundColor: colorScheme.onSurface,
-            ),
-          ],
-        ),
-      ],
+      ]),
+    ]);
+  }
+
+  // ---------- History item widget ----------
+  Widget _historyItem(Map<String, dynamic> item) {
+    final result = item['result']?.toString() ?? item['prediction']?.toString() ?? 'Unknown';
+    final confidence = item['confidence']?.toString() ?? '';
+    final filename = item['filename']?.toString();
+    final imageUrlRaw = item['image_url'] ?? item['image'] ?? filename;
+    final imageUrl = (imageUrlRaw == null)
+        ? null
+        : imageUrlRaw.toString().startsWith('http')
+            ? imageUrlRaw.toString()
+            : API_BASE + (imageUrlRaw.toString().startsWith('/') ? '' : '/') + imageUrlRaw.toString();
+
+    final ts = item['timestamp'] ?? item['created_at'];
+    final when = ts != null ? DateTime.tryParse(ts.toString()) : null;
+    final whenLabel = when != null ? when.toLocal().toString() : '';
+
+    return InkWell(
+      onTap: imageUrl != null
+          ? () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  content: imageUrl != null ? Image.network(imageUrl) : const SizedBox(),
+                ),
+              );
+            }
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(children: [
+          if (imageUrl != null)
+            ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(imageUrl, width: 72, height: 72, fit: BoxFit.cover))
+          else
+            Container(width: 72, height: 72, color: Colors.grey[200], child: const Icon(Icons.image, size: 36)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(result, style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text('${confidence}% • $whenLabel', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+            ]),
+          ),
+        ]),
+      ),
     );
   }
 
-  // ---------- Build Method ----------
+  // ---------- Build ----------
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: const Text('Diagnose'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadHistory,
+            tooltip: 'Refresh history',
+          ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 700),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Header/Title
-                  Text(
-                    'AI-Powered Plant Doctor', 
-                    style: theme.textTheme.headlineLarge?.copyWith(fontSize: 30, color: theme.colorScheme.primary),
-                    textAlign: TextAlign.center,
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: Column(children: [
+                Text('AI-Powered Plant Doctor', style: theme.textTheme.headlineSmall?.copyWith(fontSize: 26, color: theme.colorScheme.primary)),
+                const SizedBox(height: 8),
+                Text('Get an instant diagnosis by uploading a clear photo of the leaf.', style: theme.textTheme.bodyLarge, textAlign: TextAlign.center),
+                const SizedBox(height: 18),
+
+                // interactive area
+                _buildMainInteractiveArea(theme),
+
+                const SizedBox(height: 22),
+
+                // Prediction result (if any)
+                if (_predictionLabel != null) ...[
+                  Card(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14.0),
+                      child: Row(children: [
+                        if (_predictionImageUrl != null) ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(_predictionImageUrl!, width: 96, height: 96, fit: BoxFit.cover)) else SizedBox(width: 96, height: 96),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(_predictionLabel!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                            const SizedBox(height: 6),
+                            Text('Confidence: ${_predictionConfidence?.toStringAsFixed(2) ?? '0.00'}%', style: const TextStyle(fontSize: 14)),
+                          ]),
+                        ),
+                      ]),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Get instant, accurate diagnosis for common crop diseases.',
-                    style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onBackground.withOpacity(0.8)),
-                    textAlign: TextAlign.center,
-                  ),
-                  
-                  const SizedBox(height: 30),
-
-                  // Main Interactive Area
-                  _buildMainInteractiveArea(theme),
-
-                  const SizedBox(height: 24),
-
-                  // Tips/Advice Container
-                  _adviceContainer(theme),
-
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 16),
                 ],
-              ),
+
+                // error (if any)
+                if (_error != null) ...[
+                  Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)), child: Row(children: [const Icon(Icons.error_outline, color: Colors.red), const SizedBox(width: 10), Expanded(child: Text(_error!))])),
+                  const SizedBox(height: 12),
+                ],
+
+                // tips
+                _adviceContainer(theme),
+
+                const SizedBox(height: 28),
+
+                // History list
+                Align(alignment: Alignment.centerLeft, child: Text('Recent Diagnoses', style: theme.textTheme.titleMedium)),
+                const SizedBox(height: 8),
+                if (_history.isEmpty)
+                  Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)), child: const Center(child: Text('No history yet.'))),
+                if (_history.isNotEmpty)
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _history.length,
+                    separatorBuilder: (_, __) => const Divider(),
+                    itemBuilder: (_, idx) => _historyItem(_history[idx]),
+                  ),
+
+                const SizedBox(height: 40),
+              ]),
             ),
           ),
         ),
@@ -508,11 +566,3 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
     );
   }
 }
-// NOTE: Assuming your CloudinaryService in ../services/cloudinary_service.dart has been updated to handle the following signature for web uploads:
-//
-// class CloudinaryService {
-//   // ... existing logic
-//   static Future<String?> uploadImage({File? file, Uint8List? fileBytes, String? fileName, String folder = 'diagnostics'}) async {
-//      // ... Logic to use file path OR fileBytes/fileName based on which is provided ...
-//   }
-// }

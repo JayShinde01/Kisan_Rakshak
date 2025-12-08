@@ -1,5 +1,6 @@
 // lib/screens/home_content.dart
 import 'dart:convert';
+import 'package:demo/screens/diagnose_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -307,8 +308,8 @@ class _HomeContentState extends State<HomeContent> {
                 height: 52,
                 child: ElevatedButton(
                   onPressed: () {
-                    // TODO: connect camera/diagnose flow
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Open camera / diagnosis flow (TODO)')));
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => DiagnoseScreen(),));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Accessing camera ')));
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: accent,
