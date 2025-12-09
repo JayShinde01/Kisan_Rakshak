@@ -2,68 +2,109 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data'; // Needed for Uint8List (file bytes)
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart'; // Import for platform checks
+import 'package:flutter/foundation.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 
 class CloudinaryService {
-  // Your Cloudinary info (Ensure these are correct)
+  // Replace with your values
   static const String cloudName = "dmteuzsos";
-  static const String uploadPreset = "dmteuzsos"; 
+  static const String uploadPreset = "dmteuzsos";
 
-  /// Upload image to Cloudinary (unsigned)
+  /// Upload image to Cloudinary (unsigned).
   /// Accepts either a File (mobile/desktop) OR fileBytes + fileName (web).
+  ///
+  /// Returns the `secure_url` on success, otherwise null.
   static Future<String?> uploadImage({
-    File? file, 
-    Uint8List? fileBytes, 
-    String? fileName, 
-    String folder = "general"
+    File? file,
+    Uint8List? fileBytes,
+    String? fileName,
+    String folder = "general",
+    String? publicId, // optional: specify desired public id
+    String resourceType = "image", // non-nullable now
+    Duration timeout = const Duration(seconds: 30),
   }) async {
     if (file == null && fileBytes == null) {
-      print("❌ Cloudinary upload failed: No file or file bytes provided.");
+      debugPrint("Cloudinary upload failed: no file or bytes provided.");
       return null;
     }
 
     try {
-      final uri = Uri.parse(
-        "https://api.cloudinary.com/v1_1/$cloudName/image/upload",
-      );
+      final url = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/$resourceType/upload");
+      final request = http.MultipartRequest("POST", url);
 
-      final request = http.MultipartRequest("POST", uri);
+      // Basic fields
+      request.fields['upload_preset'] = uploadPreset;
+      request.fields['folder'] = folder;
+      if (publicId != null && publicId.isNotEmpty) request.fields['public_id'] = publicId;
 
-      request.fields["upload_preset"] = uploadPreset;
-      request.fields["folder"] = folder; 
-
-      // --- CRITICAL CROSS-PLATFORM FILE HANDLING ---
+      // Prepare file part with MIME type
       if (file != null) {
-        // MOBILE/DESKTOP: Upload from file path (dart:io)
-        request.files.add(await http.MultipartFile.fromPath("file", file.path));
-      } else if (fileBytes != null && fileName != null) {
-        // WEB: Upload from memory bytes
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            "file", 
-            fileBytes,
-            filename: fileName,
-          ),
+        final name = file.path.split(Platform.pathSeparator).last;
+        final mimeType = lookupMimeType(file.path) ?? 'application/octet-stream';
+        final mimeParts = mimeType.split('/');
+        final streamFile = await http.MultipartFile.fromPath(
+          'file',
+          file.path,
+          filename: name,
+          contentType: MediaType(mimeParts[0], mimeParts[1]),
         );
-      } else {
-         throw Exception('Incomplete file data (bytes or file missing).');
-      }
-      
-      final response = await request.send();
-      final respStr = await response.stream.bytesToString();
+        request.files.add(streamFile);
+      } else if (fileBytes != null) {
+        // Ensure filename and mime
+        final inferredMime = (fileName != null && fileName.contains('.'))
+            ? (lookupMimeType(fileName) ?? 'image/jpeg')
+            : 'image/jpeg';
+        final mimeParts = inferredMime.split('/');
+        final fname = fileName ??
+            'upload_${DateTime.now().millisecondsSinceEpoch}.${_extFromMime(inferredMime) ?? 'jpg'}';
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = json.decode(respStr);
-        return data["secure_url"];
+        final multipart = http.MultipartFile.fromBytes(
+          'file',
+          fileBytes,
+          filename: fname,
+          contentType: MediaType(mimeParts[0], mimeParts[1]),
+        );
+        request.files.add(multipart);
       } else {
-        print("❌ Cloudinary upload failed (Status ${response.statusCode}): $respStr");
+        throw Exception('No file data available.');
+      }
+
+      // Optional headers
+      request.headers['Accept'] = 'application/json';
+
+      // Send with timeout
+      final streamed = await request.send().timeout(timeout);
+      final respStr = await streamed.stream.bytesToString();
+
+      if (streamed.statusCode == 200 || streamed.statusCode == 201) {
+        final data = json.decode(respStr);
+        final secureUrl = data['secure_url'] as String?;
+        debugPrint('Cloudinary upload success: $secureUrl');
+        return secureUrl;
+      } else {
+        debugPrint('Cloudinary upload failed (status: ${streamed.statusCode}): $respStr');
         return null;
       }
     } catch (e, st) {
-      print("🔥 Cloudinary EXCEPTION: $e\n$st");
+      debugPrint('Cloudinary upload exception: $e\n$st');
       return null;
     }
+  }
+
+  // Helper: try to guess file extension from mime type
+  static String? _extFromMime(String mime) {
+    final mapping = <String, String>{
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'image/heic': 'heic',
+      'video/mp4': 'mp4',
+      // add more if needed
+    };
+    return mapping[mime];
   }
 }

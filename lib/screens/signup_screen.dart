@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../services/auth_service.dart';
 
@@ -34,10 +35,83 @@ class _SignupScreenState extends State<SignupScreen> {
 
   final AuthService _authService = AuthService();
 
+  // TTS
+  late final FlutterTts _flutterTts;
+  double _speechRate = 0.9; // adjust default
+
   @override
   void initState() {
     super.initState();
     _passwordCtrl.addListener(_onPasswordChanged);
+    _initTts();
+  }
+
+  Future<void> _initTts() async {
+    _flutterTts = FlutterTts();
+
+    try {
+      await _flutterTts.setSpeechRate(_speechRate);
+      await _flutterTts.setPitch(1.0);
+
+      // set language from app locale if possible
+      final localeTag = _localeTagFromLocale(context.locale) ?? 'en-US';
+      try {
+        await _flutterTts.setLanguage(localeTag);
+      } catch (_) {
+        // ignore if not available
+      }
+    } catch (e) {
+      debugPrint('TTS init error: $e');
+    }
+  }
+
+  Future<void> _speakText(String text) async {
+    try {
+      await _flutterTts.stop();
+      final localeTag = _localeTagFromLocale(context.locale) ?? 'en-US';
+      try {
+        await _flutterTts.setLanguage(localeTag);
+      } catch (_) {}
+      await _flutterTts.setSpeechRate(_speechRate);
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.speak(text);
+    } catch (e) {
+      debugPrint('TTS speak error: $e');
+    }
+  }
+
+  String? _localeTagFromLocale(Locale? locale) {
+    if (locale == null) return 'en-US';
+    final code = locale.languageCode.toLowerCase();
+    return _localeTagForLang(code);
+  }
+
+  String? _localeTagForLang(String? lang) {
+    if (lang == null) return 'en-US';
+    final code = lang.toLowerCase();
+    const mapping = {
+      'en': 'en-US',
+      'hi': 'hi-IN',
+      'mr': 'mr-IN',
+      'bn': 'bn-IN',
+      'gu': 'gu-IN',
+      'kn': 'kn-IN',
+      'ml': 'ml-IN',
+      'ta': 'ta-IN',
+      'te': 'te-IN',
+      'ur': 'ur-PK',
+      'ar': 'ar-SA',
+      'fr': 'fr-FR',
+      'es': 'es-ES',
+      'de': 'de-DE',
+      'ru': 'ru-RU',
+      'ja': 'ja-JP',
+      'zh': 'zh-CN',
+      'pt': 'pt-PT',
+    };
+    if (mapping.containsKey(code)) return mapping[code];
+    if (lang.contains('-') || lang.contains('_')) return lang;
+    return 'en-US';
   }
 
   @override
@@ -52,6 +126,10 @@ class _SignupScreenState extends State<SignupScreen> {
     _phoneFocus.dispose();
     _passwordFocus.dispose();
     _confirmFocus.dispose();
+
+    try {
+      _flutterTts.stop();
+    } catch (_) {}
     super.dispose();
   }
 
@@ -158,6 +236,11 @@ class _SignupScreenState extends State<SignupScreen> {
     final colorScheme = theme.colorScheme;
 
     if (!mounted) return;
+
+    // speak signup success (localized)
+    final spoken = user == null ? tr('signup_success_tts_fallback') : tr('signup_success_tts', namedArgs: {'email': user.email ?? ''});
+    _speakText(spoken);
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -184,7 +267,7 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _signupWithGoogle() async {
     setState(() => _loading = true);
     try {
-      final cred = await _authService.signInWithGoogle();
+      final cred = await _auth_service_signinGoogleWrapper();
       if (cred != null) {
         if (!mounted) return;
         Navigator.pushReplacementNamed(context, '/home');
@@ -198,12 +281,22 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+  // keep original behavior to navigate to phone flow
   void _signupWithPhone() => Navigator.pushNamed(context, '/phone');
 
   void _onAvatarTap() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(tr('avatar_picker_not_implemented'))),
     );
+  }
+
+  // helper wrapper so we avoid breaking existing AuthService signature call site
+  Future<UserCredential?> _auth_service_signinGoogleWrapper() async {
+    try {
+      return await _authService.signInWithGoogle();
+    } catch (_) {
+      rethrow;
+    }
   }
 
   // --- UI ---
@@ -239,19 +332,18 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     child: Row(
                       children: [
-                       CircleAvatar(
-  radius: 24,
-  backgroundColor: colorScheme.onPrimary,
-  child: ClipOval(
-    child: Image.asset(
-      'assets/images/Logo_App.png',
-      height: 80,
-      width: 80,
-      fit: BoxFit.cover,  // or BoxFit.contain based on your logo
-    ),
-  ),
-),
-
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: colorScheme.onPrimary,
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/images/Logo_App.png',
+                              height: 80,
+                              width: 80,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
                         const SizedBox(width: 14),
                         Expanded(child: Text(tr('create_account_header'), style: theme.textTheme.titleLarge?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w800, fontSize: 18))),
                       ],

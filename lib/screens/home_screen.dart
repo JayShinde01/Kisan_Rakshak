@@ -15,6 +15,9 @@ import 'package:demo/widgets/theme_manager.dart';
 import 'package:demo/screens/chat_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
@@ -41,10 +44,129 @@ class _HomeScreenState extends State<HomeScreen> {
   int notificationCount = 9;
   File? _lastPickedImage;
 
+  // TTS
+  late final FlutterTts _flutterTts;
+  double _speechRate = 0.9;
+  static const String _prefsSpeechRateKey = 'speech_rate';
+
   @override
   void initState() {
     super.initState();
     _checkLoggedIn();
+    _initTts().then((_) async {
+      // speak a welcome message after TTS init
+      await _speakOnOpen();
+    });
+  }
+
+  Future<void> _initTts() async {
+    _flutterTts = FlutterTts();
+    try {
+      // load persisted speech rate if available
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getDouble(_prefsSpeechRateKey);
+      if (saved != null) _speechRate = saved;
+
+      await _flutterTts.setSpeechRate(_speechRate);
+      await _flutterTts.setPitch(1.0);
+
+      // set language to app locale (best effort)
+      final localeTag = _localeTagFromLocale(context.locale) ?? 'en-US';
+      try {
+        await _flutterTts.setLanguage(localeTag);
+      } catch (_) {
+        // ignore if not supported
+      }
+    } catch (e) {
+      debugPrint('HomeScreen TTS init error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    try {
+      _flutterTts.stop();
+    } catch (_) {}
+    super.dispose();
+  }
+
+  String? _localeTagFromLocale(Locale? locale) {
+    if (locale == null) return 'en-US';
+    final code = locale.languageCode.toLowerCase();
+    return _localeTagForLang(code);
+  }
+
+  String? _localeTagForLang(String? lang) {
+    if (lang == null) return 'en-US';
+    final code = lang.toLowerCase();
+    const mapping = {
+      'en': 'en-US',
+      'en_us': 'en-US',
+      'en_gb': 'en-GB',
+      'hi': 'hi-IN',
+      'mr': 'mr-IN',
+      'bn': 'bn-IN',
+      'gu': 'gu-IN',
+      'kn': 'kn-IN',
+      'ml': 'ml-IN',
+      'ta': 'ta-IN',
+      'te': 'te-IN',
+      'ur': 'ur-PK',
+      'ar': 'ar-SA',
+      'fr': 'fr-FR',
+      'es': 'es-ES',
+      'de': 'de-DE',
+      'ru': 'ru-RU',
+      'ja': 'ja-JP',
+      'zh': 'zh-CN',
+      'pt': 'pt-PT',
+    };
+    if (mapping.containsKey(code)) return mapping[code];
+    if (lang.contains('-') || lang.contains('_')) return lang;
+    return 'en-US';
+  }
+
+  Future<void> _speakText(String text, {String? langCode}) async {
+    if (text.isEmpty) return;
+    try {
+      await _flutterTts.stop();
+      final tag = langCode != null ? _localeTagForLang(langCode) : _localeTagFromLocale(context.locale);
+      if (tag != null) {
+        try {
+          await _flutterTts.setLanguage(tag);
+        } catch (_) {}
+      }
+      await _flutterTts.setSpeechRate(_speechRate);
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.speak(text);
+    } catch (e) {
+      debugPrint('HomeScreen TTS speak error: $e');
+    }
+  }
+
+  Future<void> _speakOnOpen() async {
+    // Short localized welcome with optional notification count
+    final welcome = tr('welcome_home_tts', namedArgs: {'app': tr('app_title')});
+    if (notificationCount > 0) {
+      final nText = notificationCount > 9 ? tr('notifications_many_tts') : tr('notifications_count_tts', namedArgs: {'n': notificationCount.toString()});
+      await _speakText('$welcome. $nText');
+    } else {
+      await _speakText(welcome);
+    }
+  }
+
+  Future<void> _speakOnNav(int index) async {
+    // speak when navigating to certain screens (diagnose example)
+    if (index == 2) {
+      // Diagnose tab
+      final text = tr('opening_diagnose_tts');
+      await _speakText(text);
+    } else if (index == 0) {
+      // home tab
+      final text = tr('returning_home_tts');
+      await _speakText(text);
+    }
+    // Add more navigation-specific phrases if desired
   }
 
   Future<void> _checkLoggedIn() async {
@@ -57,6 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onNavSelected(int index) {
     setState(() => _selectedIndex = index);
+    _speakOnNav(index);
   }
 
   @override
@@ -101,18 +224,17 @@ class _HomeScreenState extends State<HomeScreen> {
               height: avatarSize,
               decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4)]),
               child: CircleAvatar(
-  radius: 24,
-  backgroundColor: Colors.white,
-  child: ClipOval(
-    child: Image.asset(
-      'assets/images/Logo_App.png',
-      height: 80,
-      width: 80,
-      fit: BoxFit.cover,  // or BoxFit.contain based on your logo
-    ),
-  ),
-),
-
+                radius: 24,
+                backgroundColor: Colors.white,
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/images/Logo_App.png',
+                    height: 80,
+                    width: 80,
+                    fit: BoxFit.cover, // or BoxFit.contain based on your logo
+                  ),
+                ),
+              ),
             ),
             SizedBox(width: isMobile ? 5 : 7),
             Flexible(
@@ -200,7 +322,9 @@ class _HomeScreenState extends State<HomeScreen> {
       button: true,
       child: Stack(clipBehavior: Clip.none, children: [
         IconButton(
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationPage())),
+          onPressed: () {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationPage()));
+          },
           icon: Icon(Icons.notifications_none, size: 28),
           color: Colors.white,
           tooltip: tr('notifications'),
@@ -244,6 +368,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   backgroundColor: Colors.white,
                   child: ClipOval(
                     child: SizedBox(width: 64, height: 64, child: _lastPickedImage != null ? Image.file(_lastPickedImage!, fit: BoxFit.cover) : (photoUrl != null ? Image.network(photoUrl, fit: BoxFit.cover) : const Icon(Icons.person, size: 36, color: primaryGreen))),
+
                   ),
                 ),
               ),

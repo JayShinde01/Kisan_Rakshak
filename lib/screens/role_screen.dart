@@ -3,6 +3,7 @@ import 'package:demo/main.dart';
 import 'package:demo/screens/landing_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key});
@@ -13,6 +14,7 @@ class RoleScreen extends StatefulWidget {
 
 class _RoleScreenState extends State<RoleScreen> {
   String? selectedRole = "farmer";
+  final FlutterTts _flutterTts = FlutterTts();
 
   /// use translation keys for labels/descriptions so they are localized
   final List<Map<String, String>> roles = [
@@ -33,10 +35,107 @@ class _RoleScreenState extends State<RoleScreen> {
     },
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    // small delay to allow UI to settle, then speak instructions
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _speakInstructions();
+    });
+  }
+
+  @override
+  void dispose() {
+    _flutterTts.stop();
+    super.dispose();
+  }
+
+  // ------------ TTS helpers ------------
+
+  Future<void> _speakInstructions() async {
+    final theme = Theme.of(context);
+    // Use a translation key so instructions are localized where possible.
+    final instruction = tr(
+      'role_screen_instructions',
+      namedArgs: {'default': 'Please select your role. Tap a card to choose and press Continue.'},
+    );
+
+    // Try to set language according to app locale (best-effort)
+    final localeTag = _localeTagFromLocale(context.locale);
+    try {
+      if (localeTag != null) {
+        await _flutterTts.setLanguage(localeTag);
+      }
+      await _flutterTts.setSpeechRate(0.45);
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.speak(instruction);
+    } catch (e) {
+      debugPrint('TTS instruction error: $e');
+    }
+  }
+
+  Future<void> _speakText(String text, {String? langCode}) async {
+    try {
+      await _flutterTts.stop();
+      final tag = langCode != null ? _localeTagForLang(langCode) : _localeTagFromLocale(context.locale);
+      if (tag != null) {
+        try {
+          await _flutterTts.setLanguage(tag);
+        } catch (_) {}
+      }
+      await _flutterTts.setSpeechRate(0.45);
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.speak(text);
+    } catch (e) {
+      debugPrint('TTS speak error: $e');
+    }
+  }
+
+  /// Best-effort mapping from EasyLocalization Locale -> TTS locale tag
+  String? _localeTagFromLocale(Locale? locale) {
+    if (locale == null) return 'en-US';
+    final code = locale.languageCode.toLowerCase();
+    return _localeTagForLang(code);
+  }
+
+  /// Map short language code to a fuller locale tag for TTS engines
+  String? _localeTagForLang(String? lang) {
+    if (lang == null) return 'en-US';
+    final code = lang.toLowerCase();
+    const mapping = {
+      'en': 'en-US',
+      'en_us': 'en-US',
+      'en_gb': 'en-GB',
+      'hi': 'hi-IN',
+      'mr': 'mr-IN',
+      'bn': 'bn-IN',
+      'gu': 'gu-IN',
+      'kn': 'kn-IN',
+      'ml': 'ml-IN',
+      'ta': 'ta-IN',
+      'te': 'te-IN',
+      'ur': 'ur-PK',
+      'ar': 'ar-SA',
+      'fr': 'fr-FR',
+      'es': 'es-ES',
+      'de': 'de-DE',
+      'ru': 'ru-RU',
+      'ja': 'ja-JP',
+      'zh': 'zh-CN',
+      'pt': 'pt-PT',
+    };
+    if (mapping.containsKey(code)) return mapping[code];
+    if (lang.contains('-') || lang.contains('_')) return lang;
+    return 'en-US';
+  }
+
   // ---------------- UI LOGIC ----------------
 
-  void _onNext() {
+  void _onNext() async {
     final roleKey = selectedRole ?? 'farmer';
+
+    // stop any speaking before navigating or showing dialog
+    await _flutterTts.stop();
 
     if (roleKey == "farmer") {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const LandingScreen()));
@@ -112,7 +211,11 @@ class _RoleScreenState extends State<RoleScreen> {
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => setState(() => selectedRole = key),
+          onTap: () {
+            setState(() => selectedRole = key);
+            // speak the role label when tapped
+            _speakText(label, langCode: context.locale.languageCode);
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             child: Row(
@@ -203,11 +306,11 @@ class _RoleScreenState extends State<RoleScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-             Image.asset(
-                            'assets/images/Logo_App.png',
-                            height: 40,
-                            width: 40,
-      ),
+            Image.asset(
+              'assets/images/Logo_App.png',
+              height: 40,
+              width: 40,
+            ),
             const SizedBox(width: 8),
             Text(
               tr('app_title'),

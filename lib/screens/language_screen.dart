@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'role_screen.dart';
 
 class LanguageScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
   String? selectedCode;
   Locale? deviceLocale;
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final FlutterTts _flutterTts = FlutterTts();
   bool _loading = true;
   bool _loadFailed = false;
   String? _playingAsset;
@@ -31,6 +33,15 @@ class _LanguageScreenState extends State<LanguageScreen> {
   void initState() {
     super.initState();
     _initAll();
+  }
+
+  @override
+  void dispose() {
+    // Stop any audio or TTS and release resources
+    _audioPlayer.stop();
+    _audioPlayer.dispose();
+    _flutterTts.stop();
+    super.dispose();
   }
 
   // --- INIT & LOGIC (Kept identical as logic is robust) ---
@@ -56,6 +67,10 @@ class _LanguageScreenState extends State<LanguageScreen> {
       _loadFailed = true;
     } finally {
       if (mounted) setState(() => _loading = false);
+      // Speak instructions after initial load (small delay for UI to settle)
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (mounted) _speakInstructions();
+      });
     }
   }
 
@@ -122,6 +137,9 @@ class _LanguageScreenState extends State<LanguageScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     try {
+      // stop TTS if running
+      await _flutterTts.stop();
+
       if (_playingAsset == assetPath) {
         await _audioPlayer.stop();
         setState(() => _playingAsset = null);
@@ -152,8 +170,14 @@ class _LanguageScreenState extends State<LanguageScreen> {
       selectedCode = code;
     });
 
-    if (play && audio != null) {
-      _playAudio(audio);
+    if (play) {
+      if (audio != null) {
+        _playAudio(audio);
+      } else {
+        // speak the language name using TTS
+        final native = lang['native'] as String? ?? '';
+        _speakText(native, langCode: code);
+      }
     }
   }
 
@@ -188,10 +212,103 @@ class _LanguageScreenState extends State<LanguageScreen> {
       ),
     );
 
+    // stop TTS/audio before navigating
+    await _flutterTts.stop();
+    await _audioPlayer.stop();
+
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const RoleScreen()),
     );
+  }
+
+  /// Speak default instructions when the screen opens.
+  Future<void> _speakInstructions() async {
+    if (!mounted) return;
+
+    // stop any currently playing audio
+    await _audioPlayer.stop();
+
+    final instructionText = tr(
+      'instructions_language_screen',
+      // fallback phrase if translation key missing:
+      namedArgs: {'default': 'Please select your preferred language. Tap the play button to hear language names.'},
+    );
+
+    // if selected code is phone, try to get device locale tag else use selectedCode
+    String? langCodeToUse;
+    if (selectedCode == 'phone') {
+      langCodeToUse = deviceLocale?.languageCode;
+    } else {
+      langCodeToUse = selectedCode;
+    }
+
+    await _speakText(instructionText, langCode: langCodeToUse);
+  }
+
+  /// Speak arbitrary text using flutter_tts. langCode is a short code like 'en' or 'hi'.
+  Future<void> _speakText(String text, {String? langCode}) async {
+    try {
+      // Stop other audio
+      await _audioPlayer.stop();
+
+      // Map short lang code to TTS locale tag (best-effort)
+      final localeTag = _localeTagForLang(langCode);
+
+      if (localeTag != null) {
+        // If setLanguage fails for a code on a platform it might throw, so wrap.
+        try {
+          await _flutterTts.setLanguage(localeTag);
+        } catch (e) {
+          debugPrint('TTS setLanguage failed for $localeTag: $e');
+        }
+      }
+
+      // configure rate and pitch (you can tweak)
+      try {
+        await _flutterTts.setSpeechRate(0.45); // 0.0 - 1.0 (platform-specific)
+        await _flutterTts.setPitch(1.0);
+      } catch (_) {}
+
+      await _flutterTts.speak(text);
+    } catch (e, st) {
+      debugPrint('TTS speak error: $e\n$st');
+    }
+  }
+
+  /// Try to convert 'en' or 'hi' -> 'en-US', 'hi-IN', etc. Best-effort mapping.
+  String? _localeTagForLang(String? lang) {
+    if (lang == null) return 'en-US';
+
+    final code = lang.toLowerCase();
+    const mapping = {
+      'en': 'en-US',
+      'en_us': 'en-US',
+      'en_gb': 'en-GB',
+      'hi': 'hi-IN',
+      'bn': 'bn-IN',
+      'mr': 'mr-IN',
+      'gu': 'gu-IN',
+      'kn': 'kn-IN',
+      'ml': 'ml-IN',
+      'ta': 'ta-IN',
+      'te': 'te-IN',
+      'ur': 'ur-PK',
+      'ar': 'ar-SA',
+      'fr': 'fr-FR',
+      'es': 'es-ES',
+      'de': 'de-DE',
+      'ru': 'ru-RU',
+      'ja': 'ja-JP',
+      'zh': 'zh-CN',
+      'pt': 'pt-PT',
+      // add more mappings as you need
+    };
+
+    if (mapping.containsKey(code)) return mapping[code];
+    // If lang is already a full tag, return it
+    if (lang.contains('-') || lang.contains('_')) return lang;
+    return 'en-US';
   }
 
   // --- UI COMPONENTS (Theme-Compliant & Modernized) ---
@@ -199,7 +316,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
   Widget _buildLanguageTile(Map lang) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     final code = lang['code'] as String?;
     final native = lang['native'] as String? ?? '';
     final audio = lang['audio'] as String?;
@@ -214,7 +331,6 @@ class _LanguageScreenState extends State<LanguageScreen> {
         elevation: isSelected ? 8 : 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          // Vibrant border highlight using Primary color
           side: BorderSide(
             color: isSelected ? colorScheme.primary : Colors.transparent,
             width: isSelected ? 2.5 : 0,
@@ -227,11 +343,9 @@ class _LanguageScreenState extends State<LanguageScreen> {
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
             child: Row(
               children: [
-                // Avatar/Initial
                 CircleAvatar(
                   radius: 24,
-                  // Use SurfaceVariant for soft background, Primary for text
-                  backgroundColor: colorScheme.surfaceVariant, 
+                  backgroundColor: colorScheme.surfaceVariant,
                   child: Text(
                     avatarLabel,
                     style: theme.textTheme.titleMedium?.copyWith(
@@ -241,8 +355,6 @@ class _LanguageScreenState extends State<LanguageScreen> {
                   ),
                 ),
                 const SizedBox(width: 16),
-                
-                // Language Name & Code
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -264,8 +376,6 @@ class _LanguageScreenState extends State<LanguageScreen> {
                     ],
                   ),
                 ),
-                
-                // Play Button (Theme Compliant)
                 if (audio != null)
                   IconButton(
                     onPressed: () => _onSelectLanguage(lang, play: true),
@@ -273,9 +383,17 @@ class _LanguageScreenState extends State<LanguageScreen> {
                     icon: isPlaying
                         ? Icon(Icons.stop_circle_outlined, color: colorScheme.secondary)
                         : Icon(Icons.volume_up_outlined, color: colorScheme.primary),
+                  )
+                else
+                  IconButton(
+                    onPressed: () {
+                      // speak the language name via TTS
+                      final native = lang['native'] as String? ?? '';
+                      _speakText(native, langCode: code);
+                    },
+                    tooltip: tr('play_language_name'),
+                    icon: Icon(Icons.record_voice_over, color: colorScheme.primary),
                   ),
-                
-                // Selection Indicator
                 Icon(
                   isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
                   size: 24,
@@ -304,7 +422,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
   Widget _buildBody() {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     if (_loading) {
       return Center(child: CircularProgressIndicator(color: colorScheme.primary));
     }
@@ -338,7 +456,6 @@ class _LanguageScreenState extends State<LanguageScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         child: Column(
           children: [
-            // Title and short instructions (Vibrant Gradient Header)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
@@ -362,14 +479,10 @@ class _LanguageScreenState extends State<LanguageScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // Search bar (Modernized)
             Container(
               decoration: BoxDecoration(
-                // Use subtle surface color for search background
-                color: theme.inputDecorationTheme.fillColor, 
+                color: theme.inputDecorationTheme.fillColor,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -399,10 +512,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // Language List
             Expanded(
               child: filtered.isEmpty
                   ? Center(child: Text(tr('no_languages_found'), style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onBackground.withOpacity(0.6))))
@@ -415,7 +525,6 @@ class _LanguageScreenState extends State<LanguageScreen> {
                       },
                     ),
             ),
-
             const SizedBox(height: 16),
           ],
         ),
@@ -427,10 +536,9 @@ class _LanguageScreenState extends State<LanguageScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      // Minimal App Bar (Theme Compliant)
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -439,11 +547,11 @@ class _LanguageScreenState extends State<LanguageScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-             Image.asset(
-      'assets/images/Logo_App.png',
-      width: 24,
-      height: 24,
-    ),
+            Image.asset(
+              'assets/images/Logo_App.png',
+              width: 24,
+              height: 24,
+            ),
             const SizedBox(width: 8),
             Text(
               tr('app_title'),
@@ -456,8 +564,6 @@ class _LanguageScreenState extends State<LanguageScreen> {
         ),
       ),
       body: _buildBody(),
-      
-      // Sticky Continue Button (Theme Compliant)
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),

@@ -385,5 +385,7 @@
   "class_septoria": "सेप्टोरिया",
   "class_smut": "स्मट",
   "class_unknown": "अज्ञात",
-  "class_yellow_rust": "पिवळा रस्ट"
+  "class_yellow_rust": "पिवळा रस्ट",
+  "role_screen_instructions": "कृपया आपली भूमिका निवडा. कार्ड निवडण्यासाठी टॅप करा आणि पुढे जाण्यासाठी Continue दाबा."
+
 }

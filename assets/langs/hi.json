@@ -385,5 +385,20 @@
   "class_septoria": "सेप्टोरिया",
   "class_smut": "स्मट",
   "class_unknown": "अज्ञात",
-  "class_yellow_rust": "पीला रस्ट"
+  "class_yellow_rust": "पीला रस्ट",
+  "role_screen_instructions": "कृपया अपनी भूमिका चुनें। एक कार्ड चुनने के लिए टैप करें और आगे बढ़ने के लिए Continue दबाएँ।",
+  "signup_success_tts": "स्वागत है! आपका खाता ({email}) सफलतापूर्वक बनाया गया है।",
+  "signup_success_tts_fallback": "स्वागत है! आपका खाता सफलतापूर्वक बनाया गया है।",
+  "welcome_home_tts": "{app} में आपका स्वागत है",
+  "notifications_count_tts": "आपके पास {n} नए सूचनाएँ हैं",
+  "notifications_many_tts": "आपके पास कई नई सूचनाएँ हैं",
+  "opening_diagnose_tts": "प्लांट डायग्नोसिस खोल रहे हैं। कृपया प्रभावित पत्ते की स्पष्ट तस्वीर लें।",
+  "returning_home_tts": "मुखपृष्ठ पर लौट रहे हैं।",
+   "speak_diagnosis": "निदान: {}। भरोसा: {}%"
+
+
+
+
+
+
 }

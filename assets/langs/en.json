@@ -386,5 +386,24 @@
   "class_septoria": "Septoria",
   "class_smut": "Smut",
   "class_unknown": "Unknown",
-  "class_yellow_rust": "Yellow Rust"
+  "class_yellow_rust": "Yellow Rust",
+  "role_screen_instructions": "Please select your role. Tap a card to choose and press Continue.",
+  "welcome_back_tts": "Welcome back! Please sign in or continue as guest.",
+  "speech_speed_tooltip": "Speech speed",
+  "speech_speed_title": "Speech speed",
+  "speech_speed_label": "Adjust how fast the app speaks.",
+  "slow": "Slow",
+  "fast": "Fast",
+  "current": "Current:",
+  "speech_speed_preview": "This is a sample at the selected speed.",
+   "signup_success_tts": "Welcome! Your account ({email}) has been created successfully.",
+  "signup_success_tts_fallback": "Welcome! Your account has been created successfully.",
+  "welcome_home_tts": "Welcome to {app}",
+  "notifications_count_tts": "You have {n} new notifications",
+  "notifications_many_tts": "You have many new notifications",
+  "opening_diagnose_tts": "Opening plant diagnosis. Please take a clear photo of the affected leaf.",
+  "returning_home_tts": "Returning to home.",
+    "speak_diagnosis": "Diagnosis: {}. Confidence: {}%"
+
+
 }

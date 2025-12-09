@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../services/auth_service.dart';
 
@@ -27,14 +28,39 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _rememberMe = true;
 
+  // TTS related
+  final FlutterTts _flutterTts = FlutterTts();
+  double _speechRate = 0.90;
+  static const String _prefsSpeechRateKey = 'speech_rate';
+
   final AuthService _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
+    // load persisted UI prefs first
     _loadRememberMe();
+    _loadSpeechRate().then((_) {
+      // After TTS is configured, speak a welcome message
+      _speakWelcome();
+    });
   }
 
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
+
+    // stop and release TTS
+    try {
+      _flutterTts.stop();
+    } catch (_) {}
+    super.dispose();
+  }
+
+  // -------------------- Remember me --------------------
   Future<void> _loadRememberMe() async {
     final prefs = await SharedPreferences.getInstance();
     final rem = prefs.getBool('remember_me') ?? true;
@@ -56,15 +82,147 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _emailCtrl.dispose();
-    _passwordCtrl.dispose();
-    _emailFocus.dispose();
-    _passwordFocus.dispose();
-    super.dispose();
+  // -------------------- TTS helpers --------------------
+  Future<void> _loadSpeechRate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getDouble(_prefsSpeechRateKey);
+    if (saved != null) _speechRate = saved;
+
+    // Apply to engine (best-effort)
+    try {
+      await _flutterTts.setSpeechRate(_speechRate);
+      // Optionally set language to current app locale (best-effort)
+      final langTag = _localeTagFromLocale(context.locale);
+      if (langTag != null) {
+        await _flutterTts.setLanguage(langTag);
+      }
+    } catch (_) {}
   }
 
+  Future<void> _setSpeechRate(double rate, {bool persist = true}) async {
+    _speechRate = rate;
+    try {
+      await _flutterTts.setSpeechRate(_speechRate);
+    } catch (_) {}
+    if (persist) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_prefsSpeechRateKey, _speechRate);
+    }
+  }
+
+  String? _localeTagFromLocale(Locale? locale) {
+    if (locale == null) return 'en-US';
+    final code = locale.languageCode.toLowerCase();
+    return _localeTagForLang(code);
+  }
+
+  String? _localeTagForLang(String? lang) {
+    if (lang == null) return 'en-US';
+    final code = lang.toLowerCase();
+    const mapping = {
+      'en': 'en-US',
+      'en_us': 'en-US',
+      'en_gb': 'en-GB',
+      'hi': 'hi-IN',
+      'mr': 'mr-IN',
+      'bn': 'bn-IN',
+      'gu': 'gu-IN',
+      'kn': 'kn-IN',
+      'ml': 'ml-IN',
+      'ta': 'ta-IN',
+      'te': 'te-IN',
+      'ur': 'ur-PK',
+      'ar': 'ar-SA',
+      'fr': 'fr-FR',
+      'es': 'es-ES',
+      'de': 'de-DE',
+      'ru': 'ru-RU',
+      'ja': 'ja-JP',
+      'zh': 'zh-CN',
+      'pt': 'pt-PT',
+    };
+    if (mapping.containsKey(code)) return mapping[code];
+    if (lang.contains('-') || lang.contains('_')) return lang;
+    return 'en-US';
+  }
+
+  Future<void> _speakText(String text, {String? langCode}) async {
+    try {
+      await _flutterTts.stop();
+      final tag = langCode != null ? _localeTagForLang(langCode) : _localeTagFromLocale(context.locale);
+      if (tag != null) {
+        try {
+          await _flutterTts.setLanguage(tag);
+        } catch (_) {}
+      }
+      await _flutterTts.setSpeechRate(_speechRate);
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.speak(text);
+    } catch (e) {
+      debugPrint('TTS speak error: $e');
+    }
+  }
+
+  Future<void> _speakWelcome() async {
+    final welcome = tr('welcome_back_tts', namedArgs: {'default': 'Welcome back! Please sign in or continue as guest.'});
+    await _speakText(welcome);
+  }
+
+  void _showSpeechSpeedDialog() {
+    double tempRate = _speechRate;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (context, setStateSB) {
+        return AlertDialog(
+          title: Text(tr('speech_speed_title', namedArgs: {'default': 'Speech speed'})),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(tr('speech_speed_label', namedArgs: {'default': 'Adjust how fast the app speaks.'})),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text(tr('slow', namedArgs: {'default': 'Slow'})),
+                  Expanded(
+                    child: Slider(
+                      min: 0.3,
+                      max: 1.2,
+                      divisions: 9,
+                      value: tempRate,
+                      label: tempRate.toStringAsFixed(2),
+                      onChanged: (v) {
+                        setStateSB(() => tempRate = v);
+                      },
+                    ),
+                  ),
+                  Text(tr('fast', namedArgs: {'default': 'Fast'})),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text('${tr('current', namedArgs: {'default': 'Current:'})} ${tempRate.toStringAsFixed(2)}'),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('cancel'))),
+            ElevatedButton(
+              onPressed: () async {
+                await _setSpeechRate(tempRate, persist: true);
+                // preview
+                try {
+                  await _flutterTts.stop();
+                  await _speakText(tr('speech_speed_preview', namedArgs: {'default': 'This is a sample at the selected speed.'}));
+                } catch (_) {}
+                Navigator.pop(ctx);
+              },
+              child: Text(tr('save')),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  // -------------------- Login / Auth actions --------------------
   Future<void> _login() async {
     FocusScope.of(context).unfocus();
 
@@ -225,6 +383,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // -------------------- UI --------------------
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -241,7 +400,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // --- Header: Modern Gradient ---
+                  // --- Header: Modern Gradient with TTS speed button ---
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
                     decoration: BoxDecoration(
@@ -256,18 +415,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Row(
                       children: [
                         CircleAvatar(
-  radius: 24,
-  backgroundColor: colorScheme.onPrimary,
-  child: ClipOval(
-    child: Image.asset(
-      'assets/images/Logo_App.png',
-      height: 80,
-      width: 80,
-      fit: BoxFit.cover,  // or BoxFit.contain based on your logo
-    ),
-  ),
-),
-
+                          radius: 24,
+                          backgroundColor: colorScheme.onPrimary,
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/images/Logo_App.png',
+                              height: 80,
+                              width: 80,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Icon(Icons.public, color: colorScheme.primary),
+                            ),
+                          ),
+                        ),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Text(
@@ -278,6 +437,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               fontSize: 18,
                             ),
                           ),
+                        ),
+
+                        // TTS speed button
+                        IconButton(
+                          tooltip: tr('speech_speed_tooltip', namedArgs: {'default': 'Speech speed'}),
+                          onPressed: _showSpeechSpeedDialog,
+                          icon: const Icon(Icons.speed_outlined),
+                          color: colorScheme.onPrimary,
                         ),
                       ],
                     ),
@@ -295,7 +462,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         key: _formKey,
                         child: Column(
                           children: [
-                            // Title
                             Align(
                               alignment: Alignment.centerLeft,
                               child: Text(tr('login_to_continue'), style: theme.textTheme.titleMedium),
