@@ -1,14 +1,26 @@
 // lib/screens/schedule_screen.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:demo/main.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// Notification packages
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
+
+// For web notifications (we need NotificationOptions etc.)
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
+
 
 /// A lightweight schedule entry model.
 class ScheduleEntry {
@@ -104,6 +116,170 @@ class ScheduleEntry {
   }
 }
 
+/// NotificationService - handles local scheduled notifications (native) and
+/// a simple web fallback while the page is open.
+class NotificationService {
+  NotificationService._privateConstructor();
+  static final NotificationService instance = NotificationService._privateConstructor();
+
+  final FlutterLocalNotificationsPlugin _flnp = FlutterLocalNotificationsPlugin();
+  bool _initialized = false;
+
+  // Web-only: keep timers so scheduled notifications can be cancelled
+  final Map<String, Timer> _webTimers = {};
+
+  Future<void> init() async {
+    if (_initialized) return;
+    // Initialize timezone data
+    tzdata.initializeTimeZones();
+
+    // Attempt to set local timezone. For best results add `flutter_native_timezone` to pubspec
+    // and use: final String tzName = await FlutterNativeTimezone.getLocalTimezone();
+    // then tz.setLocalLocation(tz.getLocation(tzName));
+    // Here we attempt a safe fallback: use the system local zone if possible.
+    try {
+      tz.setLocalLocation(tz.getLocation(tz.local.name));
+    } catch (_) {
+      try {
+        tz.setLocalLocation(tz.getLocation('UTC'));
+      } catch (_) {}
+    }
+
+    // Android initialization
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    final initSettings = InitializationSettings(
+      android: androidInit,
+      // iOS initialization left default; if you want iOS specifics, add them here
+    );
+
+    await _flnp.initialize(initSettings, onDidReceiveNotificationResponse: (payload) {
+      // handle tap on notification if needed
+    });
+
+    // Web: request permission early if running on web
+    if (kIsWeb) {
+      await _requestWebPermission();
+    }
+
+    _initialized = true;
+  }
+
+  Future<void> _requestWebPermission() async {
+    try {
+      if (html.Notification != null && html.Notification.permission != 'granted') {
+        await html.Notification.requestPermission();
+      }
+    } catch (_) {}
+  }
+
+  /// Schedule a notification at a specific DateTime.
+  /// [id] - unique int id for the notification (use e.g. hashCode or parse id)
+  /// [title], [body] - text for the notification
+  Future<void> scheduleNotification({required String id, required DateTime dateTime, required String title, String? body}) async {
+    await init();
+
+    // If dateTime is in the past, don't schedule
+    if (dateTime.isBefore(DateTime.now())) return;
+
+    final int nid = _idFromString(id);
+
+    if (kIsWeb) {
+      // Web fallback: browsers don't support background scheduled notifications reliably.
+      // We'll schedule a Timer that shows a Notification while the page is open.
+      // NOTE: if user closes the tab, notification will not appear.
+      // Cancel previous timer if present
+      _webTimers[id]?.cancel();
+      final delay = dateTime.difference(DateTime.now());
+      final t = Timer(delay, () {
+        _showWebNotification(id: id, title: title, body: body ?? '');
+      });
+      _webTimers[id] = t;
+      return;
+    }
+
+    // Native platforms: use zonedSchedule for correct timezone handling
+    final androidDetails = AndroidNotificationDetails(
+      'schedule_channel',
+      'Scheduled Notifications',
+      channelDescription: 'Cropcare scheduled reminders',
+      importance: Importance.max,
+      priority: Priority.high,
+      ticker: 'ticker',
+    );
+
+    final notificationDetails = NotificationDetails(android: androidDetails);
+
+    final tz.TZDateTime tzDT = tz.TZDateTime.from(dateTime, tz.local);
+
+    await _flnp.zonedSchedule(
+      nid,
+      title,
+      body,
+      tzDT,
+      notificationDetails,
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      // We don't set matchDateTimeComponents — if you want daily/weekly repeats, handle separately
+    );
+  }
+
+  Future<void> cancelNotification(String id) async {
+    await init();
+    final int nid = _idFromString(id);
+    if (kIsWeb) {
+      // cancel and remove stored timer if exists
+      _webTimers[id]?.cancel();
+      _webTimers.remove(id);
+      return;
+    }
+    await _flnp.cancel(nid);
+  }
+
+  Future<void> cancelAll() async {
+    await init();
+    if (kIsWeb) {
+      for (final t in _webTimers.values) {
+        t.cancel();
+      }
+      _webTimers.clear();
+      return;
+    }
+    await _flnp.cancelAll();
+  }
+Future<void> _showWebNotification(String title, String body) async {
+  try {
+    // Request permission if needed
+    if (html.Notification.permission != 'granted') {
+      final perm = await html.Notification.requestPermission();
+      if (perm != 'granted') return;
+    }
+
+    // Build JS object for options
+    final options = js_util.newObject();
+    js_util.setProperty(options, 'body', body);
+    js_util.setProperty(options, 'data', {'id': title});
+
+    // Create notification
+    final notif = html.Notification(title, options);
+
+    // Click behavior
+    notif.onClick.listen((_) {
+      html.window.focus();
+      notif.close();
+    });
+
+  } catch (e) {
+    print("Web Notification Error: $e");
+  }
+}
+
+
+  int _idFromString(String s) {
+    // produce a stable int id from string (notification plugin expects int id)
+    return s.hashCode & 0x7fffffff;
+  }
+}
+
 /// Schedule screen
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({Key? key}) : super(key: key);
@@ -126,6 +302,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   void initState() {
     super.initState();
+    // initialize notification service (safe to call repeatedly)
+    NotificationService.instance.init();
     _loadEntries();
     // Also listen for auth changes so we can switch between local & remote
     _auth.userChanges().listen((user) {
@@ -338,6 +516,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     entry.repeat = repeat;
                     entry.dateTime = selectedDateTime;
                     entry.notes = notesCtrl.text.trim();
+                    // update scheduled notification (cancel then schedule again)
+                    await NotificationService.instance.cancelNotification(entry.id);
+                    await NotificationService.instance.scheduleNotification(
+                      id: entry.id,
+                      dateTime: entry.dateTime,
+                      title: entry.title,
+                      body: entry.notes,
+                    );
                   } else {
                     final newEntry = ScheduleEntry(
                       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -348,6 +534,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       notes: notesCtrl.text.trim(),
                     );
                     _entries.add(newEntry);
+                    // schedule notification for the new entry
+                    await NotificationService.instance.scheduleNotification(
+                      id: newEntry.id,
+                      dateTime: newEntry.dateTime,
+                      title: newEntry.title,
+                      body: newEntry.notes,
+                    );
                   }
 
                   _entries.sort((a, b) => a.dateTime.compareTo(b.dateTime));
@@ -385,6 +578,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       _entries.removeWhere((it) => it.id == entry.id);
     });
 
+    // cancel scheduled notification
+    await NotificationService.instance.cancelNotification(entry.id);
+
     final uid = _auth.currentUser?.uid;
     if (uid != null) {
       try {
@@ -416,8 +612,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       }
       e.dateTime = next;
       e.done = false;
+      // reschedule notification for next occurrence
+      await NotificationService.instance.cancelNotification(e.id);
+      await NotificationService.instance.scheduleNotification(id: e.id, dateTime: e.dateTime, title: e.title, body: e.notes);
     } else {
       e.done = !e.done;
+      if (e.done) {
+        await NotificationService.instance.cancelNotification(e.id);
+      } else {
+        await NotificationService.instance.scheduleNotification(id: e.id, dateTime: e.dateTime, title: e.title, body: e.notes);
+      }
     }
 
     final uid = _auth.currentUser?.uid;
@@ -457,6 +661,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         for (final e in completed) {
           try {
             await _db.collection('users').doc(uid).collection('schedules').doc(e.id).delete();
+            await NotificationService.instance.cancelNotification(e.id);
           } catch (_) {}
         }
       }
@@ -492,6 +697,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           }
         } catch (_) {}
       }
+
+      // cancel all scheduled notifications (native + web)
+      await NotificationService.instance.cancelAll();
 
       setState(() => _entries.clear());
       await _saveToLocal();
@@ -552,6 +760,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 _entries.add(quick);
                 _entries.sort((a, b) => a.dateTime.compareTo(b.dateTime));
               });
+              // schedule notification for quick entry
+              await NotificationService.instance.scheduleNotification(id: quick.id, dateTime: quick.dateTime, title: quick.title, body: quick.notes);
               await _saveEntries();
             },
           ),
@@ -645,6 +855,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                         _entries.add(copy);
                                         _entries.sort((a, b) => a.dateTime.compareTo(b.dateTime));
                                       });
+                                      // schedule notification for duplicate
+                                      await NotificationService.instance.scheduleNotification(id: copy.id, dateTime: copy.dateTime, title: copy.title, body: copy.notes);
                                       await _saveEntries();
                                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('schedule_duplicated'.tr())));
                                     }

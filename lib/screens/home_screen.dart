@@ -100,7 +100,19 @@ class _HomeScreenState extends State<HomeScreen> {
               width: avatarSize,
               height: avatarSize,
               decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4)]),
-              child: Icon(Icons.eco, color: primaryGreen, size: iconSize),
+              child: CircleAvatar(
+  radius: 24,
+  backgroundColor: Colors.white,
+  child: ClipOval(
+    child: Image.asset(
+      'assets/images/Logo_App.png',
+      height: 80,
+      width: 80,
+      fit: BoxFit.cover,  // or BoxFit.contain based on your logo
+    ),
+  ),
+),
+
             ),
             SizedBox(width: isMobile ? 5 : 7),
             Flexible(
@@ -134,13 +146,6 @@ class _HomeScreenState extends State<HomeScreen> {
             leading: Padding(
               padding: const EdgeInsets.only(top: 8.0),
               child: Column(children: [
-                Container(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                  child: Icon(Icons.eco, color: primaryGreen),
-                ),
               ]),
             ),
             minWidth: 72,

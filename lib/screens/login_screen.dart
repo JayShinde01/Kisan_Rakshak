@@ -256,10 +256,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Row(
                       children: [
                         CircleAvatar(
-                          radius: 24,
-                          backgroundColor: colorScheme.onPrimary,
-                          child: Icon(Icons.eco, color: colorScheme.primary, size: 30),
-                        ),
+  radius: 24,
+  backgroundColor: colorScheme.onPrimary,
+  child: ClipOval(
+    child: Image.asset(
+      'assets/images/Logo_App.png',
+      height: 80,
+      width: 80,
+      fit: BoxFit.cover,  // or BoxFit.contain based on your logo
+    ),
+  ),
+),
+
                         const SizedBox(width: 16),
                         Expanded(
                           child: Text(

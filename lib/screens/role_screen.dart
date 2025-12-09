@@ -203,7 +203,11 @@ class _RoleScreenState extends State<RoleScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.eco, color: AgrioDemoApp.primaryGreen, size: 24),
+             Image.asset(
+                            'assets/images/Logo_App.png',
+                            height: 40,
+                            width: 40,
+      ),
             const SizedBox(width: 8),
             Text(
               tr('app_title'),

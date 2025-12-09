@@ -239,7 +239,19 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     child: Row(
                       children: [
-                        CircleAvatar(radius: 24, backgroundColor: colorScheme.onPrimary, child: Icon(Icons.eco, color: colorScheme.primary, size: 28)),
+                       CircleAvatar(
+  radius: 24,
+  backgroundColor: colorScheme.onPrimary,
+  child: ClipOval(
+    child: Image.asset(
+      'assets/images/Logo_App.png',
+      height: 80,
+      width: 80,
+      fit: BoxFit.cover,  // or BoxFit.contain based on your logo
+    ),
+  ),
+),
+
                         const SizedBox(width: 14),
                         Expanded(child: Text(tr('create_account_header'), style: theme.textTheme.titleLarge?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w800, fontSize: 18))),
                       ],

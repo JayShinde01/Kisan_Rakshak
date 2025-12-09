@@ -440,7 +440,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
              Image.asset(
-      'assets/images/app_logo.png',
+      'assets/images/Logo_App.png',
       width: 24,
       height: 24,
     ),
