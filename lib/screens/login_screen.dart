@@ -30,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // TTS related
   final FlutterTts _flutterTts = FlutterTts();
-  double _speechRate = 0.90;
+  double _speechRate = 0.50;
   static const String _prefsSpeechRateKey = 'speech_rate';
 
   final AuthService _authService = AuthService();

@@ -52,6 +52,16 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
   double _speechRate = 0.45;
   static const String _prefsSpeechRateKey = 'speech_rate';
 
+  // ===== Solution fields (retrieved from backend) =====
+  String? _solutionShortDesc;
+  String? _solutionRecommendedTreatment;
+  List<String> _solutionSteps = [];
+  List<String> _solutionPreventive = [];
+  String? _solutionNotes;
+
+  // Optional: cache solutions map to avoid repeated network calls during same session
+  Map<String, dynamic>? _solutionsCache;
+
   @override
   void initState() {
     super.initState();
@@ -185,6 +195,202 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
     }
   }
 
+  /// ===== Helper: fetch solutions JSON and populate solution fields =====
+  /// Robust: supports Map or List JSON, normalizes label, case-insensitive fallback,
+  /// and accepts a variety of field names for steps/preventive/treatment.
+  Future<void> _fetchSolutionForLabel(String label) async {
+    if (label.isEmpty) return;
+    final normLabel = label.trim();
+    try {
+      debugPrint('Fetching solution for label="$normLabel" (cache present=${_solutionsCache != null})');
+
+      // If we have cache, use it; otherwise fetch
+      if (_solutionsCache == null) {
+        final uri = Uri.parse('$API_BASE/api/solutions');
+        debugPrint('GET $uri');
+        final resp = await http.get(uri);
+        debugPrint('Solutions HTTP ${resp.statusCode}');
+        if (resp.statusCode != 200) {
+          debugPrint('Solutions fetch failed: ${resp.statusCode} ${resp.body}');
+          return;
+        }
+
+        final body = resp.body;
+        dynamic parsed;
+        try {
+          parsed = json.decode(body);
+        } catch (e) {
+          debugPrint('Failed to decode solutions JSON: $e -- body: ${body.length > 200 ? body.substring(0, 200) : body}');
+          return;
+        }
+
+        if (parsed is Map<String, dynamic>) {
+          _solutionsCache = parsed;
+        } else if (parsed is List) {
+          final Map<String, dynamic> map = {};
+          for (final item in parsed) {
+            if (item is Map<String, dynamic>) {
+              final keyCandidates = <String?>[
+                item['label']?.toString(),
+                item['name']?.toString(),
+                item['disease']?.toString(),
+                item['title']?.toString(),
+              ];
+              final k = keyCandidates.firstWhere((e) => e != null && e.isNotEmpty, orElse: () => null);
+              if (k != null) map[k.trim()] = item;
+            }
+          }
+          _solutionsCache = map;
+        } else {
+          debugPrint('Unexpected solutions JSON root type: ${parsed.runtimeType}');
+          return;
+        }
+        debugPrint('Solutions cache loaded with ${_solutionsCache!.length} entries');
+      }
+
+      // Try direct key match first, then case-insensitive fallback
+      Map<String, dynamic>? entry;
+      if (_solutionsCache!.containsKey(normLabel)) {
+        final e = _solutionsCache![normLabel];
+        if (e is Map<String, dynamic>) entry = e;
+      } else {
+        final foundKey = _solutionsCache!.keys.firstWhere(
+          (k) => k.toString().trim().toLowerCase() == normLabel.toLowerCase(),
+          orElse: () => '',
+        );
+        if (foundKey.isNotEmpty) {
+          final e = _solutionsCache![foundKey];
+          if (e is Map<String, dynamic>) entry = e;
+        }
+      }
+
+      if (entry == null) {
+        debugPrint('No solution entry for label="$normLabel" (checked ${_solutionsCache!.length} keys)');
+        if (!mounted) return;
+        setState(() {
+          _solutionShortDesc = null;
+          _solutionRecommendedTreatment = null;
+          _solutionSteps = [];
+          _solutionPreventive = [];
+          _solutionNotes = null;
+        });
+        return;
+      }
+
+      // --- robust parsing + safe setState replacement ---
+      if (!mounted) return;
+
+      // Normalize entry into a Map<String, dynamic> if possible
+      Map<String, dynamic>? entryMap;
+      try {
+        if (entry is Map<String, dynamic>) {
+          entryMap = entry;
+        } else if (entry is String && entry.isNotEmpty) {
+          // sometimes backend returns a JSON-encoded string
+          try {
+            final decoded = json.decode(entry as String);
+            if (decoded is Map<String, dynamic>) entryMap = decoded;
+          } catch (_) {
+            // leave as null and fall back to using entry.toString()
+          }
+        } else if (entry != null) {
+          // best-effort: convert other Map types
+          try {
+            entryMap = Map<String, dynamic>.from(entry as Map);
+          } catch (_) {
+            entryMap = null;
+          }
+        }
+      } catch (e, st) {
+        debugPrint('Entry normalization failed: $e\n$st');
+        entryMap = null;
+      }
+
+      // Extract values defensively
+      final shortDesc = entryMap?['short_description']?.toString()
+          ?? entryMap?['short']?.toString()
+          ?? entryMap?['summary']?.toString()
+          ?? (entry is String ? entry.toString() : null);
+
+      final recommended = entryMap?['recommended_treatment']?.toString()
+          ?? entryMap?['treatment']?.toString()
+          ?? entryMap?['recommendation']?.toString();
+
+      final notes = entryMap?['notes']?.toString() ?? entryMap?['note']?.toString();
+
+      final stepsRaw = entryMap?['steps'] ?? entryMap?['procedure'] ?? entryMap?['how_to'] ?? entryMap?['instructions'];
+      final parsedSteps = _asStringList(stepsRaw);
+
+      final prevRaw = entryMap?['preventive_measures'] ?? entryMap?['preventive'] ?? entryMap?['prevention'] ?? entryMap?['prevention_measures'];
+      final parsedPrev = _asStringList(prevRaw);
+
+      // finally update state with prepared values
+      setState(() {
+        _solutionShortDesc = shortDesc;
+        _solutionRecommendedTreatment = recommended;
+        _solutionNotes = notes;
+        _solutionSteps = parsedSteps;
+        _solutionPreventive = parsedPrev;
+      });
+
+      debugPrint('Populated solution for "$normLabel": short=${_solutionShortDesc != null}, steps=${_solutionSteps.length}, prev=${_solutionPreventive.length}');
+    } catch (e, st) {
+      debugPrint('Error fetching solution for $label: $e\n$st');
+    }
+  }
+
+  // Helper: convert many possible shapes into List<String>
+  List<String> _asStringList(dynamic v) {
+    if (v == null) return <String>[];
+
+    // Already a List or Iterable
+    if (v is List) {
+      return v.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList();
+    }
+    if (v is Iterable) {
+      return v.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList();
+    }
+
+    // String: try JSON decode, then common split heuristics
+    if (v is String) {
+      final s = v.trim();
+      if (s.isEmpty) return <String>[];
+
+      // Try JSON array encoded as string: '["a","b"]'
+      if (s.startsWith('[') && s.endsWith(']')) {
+        try {
+          final parsed = json.decode(s);
+          if (parsed is List) {
+            return parsed.map((e) => e?.toString() ?? '').where((x) => x.isNotEmpty).toList();
+          }
+        } catch (_) {
+          // ignore and fall back
+        }
+      }
+
+      // If string contains newlines, split on them
+      if (s.contains('\n')) {
+        return s.split('\n').map((e) => e.trim()).where((x) => x.isNotEmpty).toList();
+      }
+
+      // If comma-separated, split on commas
+      if (s.contains(',')) {
+        return s.split(',').map((e) => e.trim()).where((x) => x.isNotEmpty).toList();
+      }
+
+      // Single plain string
+      return <String>[s];
+    }
+
+    // Fallback: single element from any other type
+    try {
+      final str = v.toString();
+      return str.isEmpty ? <String>[] : <String>[str];
+    } catch (_) {
+      return <String>[];
+    }
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     if (_isUploading) return;
     setState(() {
@@ -271,6 +477,13 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
       _predictionConfidence = null;
       _predictionImageUrl = null;
       _error = null;
+
+      // reset solution UI while new prediction is pending
+      _solutionShortDesc = null;
+      _solutionRecommendedTreatment = null;
+      _solutionSteps = [];
+      _solutionPreventive = [];
+      _solutionNotes = null;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('uploading_diagnosis')), duration: const Duration(seconds: 2)));
@@ -308,6 +521,11 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
       }
 
       serverJson = json.decode(resp.body) as Map<String, dynamic>;
+      // DEBUG: print server JSON head to help diagnose label mismatches
+      try {
+        debugPrint('Server JSON: ${serverJson.toString().length > 800 ? serverJson.toString().substring(0, 800) + "..." : serverJson.toString()}');
+      } catch (_) {}
+
       final result = serverJson['result'] as String? ?? serverJson['prediction'] as String?;
       final confidence = (serverJson['confidence'] is num)
           ? (serverJson['confidence'] as num).toDouble()
@@ -329,6 +547,13 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
 
       // speak diagnosis (after state updated)
       await _speakDiagnosis();
+
+      // Immediately fetch solution details for the predicted label (best-effort)
+      if (_predictionLabel != null) {
+        // DEBUG: you can temporarily force fresh fetch by uncommenting next line:
+        // _solutionsCache = null;
+        await _fetchSolutionForLabel(_predictionLabel!);
+      }
 
       // 2) upload to Cloudinary
       if (!kIsWeb && _lastPickedFile != null) {
@@ -652,6 +877,59 @@ class _DiagnoseScreenState extends State<DiagnoseScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // ======= Solution / Treatment Card =======
+                  if (_solutionShortDesc != null || _solutionRecommendedTreatment != null || _solutionSteps.isNotEmpty || _solutionPreventive.isNotEmpty || _solutionNotes != null) ...[
+                    Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.all(14.0),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(tr('recommended_action'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          if (_solutionShortDesc != null) Text(_solutionShortDesc!, style: theme.textTheme.bodyMedium),
+                          if (_solutionRecommendedTreatment != null) ...[
+                            const SizedBox(height: 10),
+                            Text(tr('treatment'), style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            Text(_solutionRecommendedTreatment!, style: theme.textTheme.bodyMedium),
+                          ],
+                          if (_solutionSteps.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Text(tr('steps'), style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: _solutionSteps.map((s) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 6.0),
+                                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('• ', style: theme.textTheme.bodyMedium), Expanded(child: Text(s, style: theme.textTheme.bodyMedium))]),
+                                )).toList()
+                            )
+                          ],
+                          if (_solutionPreventive.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Text(tr('preventive_measures'), style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: _solutionPreventive.map((s) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 6.0),
+                                  child: Row(children: [Text('• ', style: theme.textTheme.bodyMedium), Expanded(child: Text(s, style: theme.textTheme.bodyMedium))]),
+                                )).toList()
+                            )
+                          ],
+                          if (_solutionNotes != null) ...[
+                            const SizedBox(height: 10),
+                            Text(tr('notes'), style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            Text(_solutionNotes!, style: theme.textTheme.bodySmall),
+                          ]
+                        ]),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ]
                 ],
                 if (_error != null) ...[
                   Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)), child: Row(children: [const Icon(Icons.error_outline, color: Colors.red), const SizedBox(width: 10), Expanded(child: Text(_error!))])),

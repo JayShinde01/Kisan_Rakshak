@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:demo/widgets/theme_manager.dart';
 import 'package:demo/screens/chat_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -200,15 +201,20 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: offWhite,
       drawer: _buildAppDrawer(context, isDesktop: isDesktop),
 
-      floatingActionButton: FloatingActionButton(
+     floatingActionButton: kIsWeb
+    ? null
+    : FloatingActionButton(
         heroTag: 'home_chat_fab',
-        onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatScreen()));
-        },
         backgroundColor: primaryGreen,
         child: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-        tooltip: tr('open_chat'),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ChatScreen()),
+          );
+        },
       ),
+
 
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(toolbarHeight),
