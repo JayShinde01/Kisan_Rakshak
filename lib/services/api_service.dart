@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 //SERVICES/API_SERVICE.DART
 class ApiService {
-  static const String apiUrl = "http://10.0.2.2:5000/flutter_predict"; 
+  static const String apiUrl = "https://kisan-rakshak-mlbackend.onrender.com/flutter_predict"; 
   // 👉 Android Emulator uses 10.0.2.2 for localhost
 
   static Future<Map<String, dynamic>> uploadImage(File file) async {

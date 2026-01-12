@@ -6,14 +6,14 @@ class ApiConfig {
   static String get baseUrl {
     if (kIsWeb) {
       // Flutter Web always runs on PC browser → use localhost
-      return "http://10.231.53.9:5000";
+      return "https://kisan-rakshak-mlbackend.onrender.com";
     }
 
     // For mobile / desktop (not web)
     if (Platform.isAndroid) {
       // Detect: Emulator or Physical Device
-      return _isEmulator ? "http://10.0.2.2:5000"     // Android Emulator
-                         : "http://10.231.53.9:5000"; // ✔ Physical Android Device on same WiFi
+      return _isEmulator ? "https://kisan-rakshak-mlbackend.onrender.com"     // Android Emulator
+                         : "https://kisan-rakshak-mlbackend.onrender.com"; // ✔ Physical Android Device on same WiFi
     }
 
     // iOS Simulator / mac / windows → localhost
