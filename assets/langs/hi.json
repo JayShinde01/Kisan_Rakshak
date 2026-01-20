@@ -119,7 +119,7 @@
   "strength_strong": "मज़बूत",
   "open_chat": "चैट खोलें",
   "schedule": "अनुसूची",
-  "nav_chat": "चैट",
+  "nav_chat": "होम",
   "nav_market": "बाजार",
   "nav_diagnose": "निदान",
   "nav_community": "समुदाय",
@@ -394,11 +394,11 @@
   "notifications_many_tts": "आपके पास कई नई सूचनाएँ हैं",
   "opening_diagnose_tts": "प्लांट डायग्नोसिस खोल रहे हैं। कृपया प्रभावित पत्ते की स्पष्ट तस्वीर लें।",
   "returning_home_tts": "मुखपृष्ठ पर लौट रहे हैं।",
-   "speak_diagnosis": "निदान: {}। भरोसा: {}%"
-
-
-
-
+   "speak_diagnosis": "निदान: {}। भरोसा: {}%",
+   "mute_voice": "आवाज़ निर्देश बंद करें",
+"unmute_voice": "आवाज़ निर्देश चालू करें",
+"voice_muted": "आवाज़ निर्देश बंद कर दिए गए हैं",
+"voice_unmuted": "आवाज़ निर्देश चालू कर दिए गए हैं"
 
 
 }

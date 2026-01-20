@@ -4,40 +4,37 @@
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+  <meta name="description" content="KisanRakshak – Smart farming assistant">
 
+  <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-<meta name="google-signin-client_id"
-      content="896246335749-o54uhcdne9n4rpuq851mn2bjtr109ju6.apps.googleusercontent.com">
-      <meta name="credentialless" content="true">
 
+  <!-- Google Sign-in -->
+  <meta name="google-signin-client_id"
+        content="896246335749-o54uhcdne9n4rpuq851mn2bjtr109ju6.apps.googleusercontent.com">
+  <meta name="credentialless" content="true">
 
-  <!-- iOS meta tags & icons -->
+  <!-- iOS meta -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="demo">
+  <meta name="apple-mobile-web-app-title" content="KisanRakshak">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>demo</title>
+  <title>KisanRakshak</title>
   <link rel="manifest" href="manifest.json">
 
-  <!-- -------------------------- -->
-  <!-- 🔥 FIREBASE SDK SCRIPTS     -->
-  <!-- -------------------------- -->
-
-  <!-- Firebase core -->
+  <!-- ========================= -->
+  <!-- 🔥 FIREBASE SDK           -->
+  <!-- ========================= -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src='https://cdn.jotfor.ms/agent/embedjs/019b02bac0887d99ae37356ecd239e719a6b/embed.js'></script>
-  <!-- Firebase products -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics-compat.js"></script>
 
   <script>
-    // Your Firebase configuration
     const firebaseConfig = {
       apiKey: "AIzaSyB_zDPZWQQWILhAvJ9gGDZN-e-U8M5nnFI",
       authDomain: "login-1665b.firebaseapp.com",
@@ -48,13 +45,69 @@
       measurementId: "G-5TXPF4056R"
     };
 
-    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     firebase.analytics();
   </script>
 
+  <!-- ========================= -->
+  <!-- 🤖 JOTFORM CHATBOT FIX    -->
+  <!-- ========================= -->
+  <style>
+    /* Base chatbot positioning */
+    iframe[src*="jotfor.ms"],
+    div[id*="jotform"],
+    div[class*="jotform"],
+    div[class*="agent"] {
+      position: fixed !important;
+      bottom: 120px !important; /* ABOVE bottom nav */
+      right: 16px !important;
+      z-index: 9999 !important;
+    }
+
+    /* Mobile phones */
+    @media (max-width: 600px) {
+      iframe[src*="jotfor.ms"],
+      div[id*="jotform"],
+      div[class*="jotform"],
+      div[class*="agent"] {
+        bottom: 10px !important; /* clears nav + FAB */
+        right: 3px !important;
+        transform: scale(0.95);
+      }
+    }
+
+    /* Tablets */
+    @media (min-width: 601px) and (max-width: 1024px) {
+      iframe[src*="jotfor.ms"],
+      div[id*="jotform"],
+      div[class*="jotform"],
+      div[class*="agent"] {
+        bottom: 110px !important;
+        right: 20px !important;
+      }
+    }
+
+    /* Desktop */
+    @media (min-width: 1025px) {
+      iframe[src*="jotfor.ms"],
+      div[id*="jotform"],
+      div[class*="jotform"],
+      div[class*="agent"] {
+        bottom: 32px !important;
+        right: 32px !important;
+      }
+    }
+  </style>
+
 </head>
+
 <body>
+
+  <!-- Jotform Chatbot -->
+  <script src="https://cdn.jotfor.ms/agent/embedjs/019b02bac0887d99ae37356ecd239e719a6b/embed.js"></script>
+
+  <!-- Flutter -->
   <script src="flutter_bootstrap.js" async></script>
+
 </body>
 </html>

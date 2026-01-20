@@ -57,7 +57,7 @@ dependencies:
   # Utilities
   url_launcher: ^6.3.0
   flutter_tts: ^4.0.2
-  flutter_native_timezone: ^2.0.0
+  
   
 
 dev_dependencies:

@@ -12,6 +12,7 @@ import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/landing_screen.dart';
+
 import 'screens/profile_screen.dart';
 import 'screens/field_map_screen.dart';
 import 'screens/schedule_screen.dart';

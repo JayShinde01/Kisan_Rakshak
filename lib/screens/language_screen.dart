@@ -1,6 +1,7 @@
 // lib/screens/language_screen.dart
 
 import 'dart:convert';
+import 'dart:math'; // Added for min function in avatar
 import 'package:demo/main.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -53,14 +54,15 @@ class _LanguageScreenState extends State<LanguageScreen> {
     });
 
     try {
-      deviceLocale = WidgetsBinding.instance.window.locale;
+      // Use platformDispatcher for better compatibility across platforms (web/desktop)
+      deviceLocale = WidgetsBinding.instance.platformDispatcher.locale; 
       await _loadLanguages();
       await _loadSavedLocale();
       selectedCode ??= 'en';
     } catch (e, st) {
       debugPrint('LanguageScreen._initAll error: $e\n$st');
       languages = [
-        {"code": "phone", "native": tr('phone_language', namedArgs: {'name': 'English'}), "audio": null},
+        // {"code": "phone", "native": tr('phone_language', namedArgs: {'name': 'English'}), "audio": null},
         {"code": "en", "native": "English", "audio": null},
       ];
       selectedCode ??= 'en';
@@ -313,99 +315,173 @@ class _LanguageScreenState extends State<LanguageScreen> {
 
   // --- UI COMPONENTS (Theme-Compliant & Modernized) ---
 
-  Widget _buildLanguageTile(Map lang) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+Widget _buildLanguageTile(Map lang) {
+  final theme = Theme.of(context);
+  final colorScheme = theme.colorScheme;
+  final media = MediaQuery.of(context);
+  final isMobile = media.size.width < 600;
 
-    final code = lang['code'] as String?;
-    final native = lang['native'] as String? ?? '';
-    final audio = lang['audio'] as String?;
-    final isSelected = selectedCode == code;
-    final avatarLabel = (code ?? '').toUpperCase().isNotEmpty && code != 'phone' ? (code ?? '').toUpperCase() : 'A';
-    final isPlaying = (_playingAsset != null && audio != null && _playingAsset == audio);
+  final code = lang['code'] as String?;
+  final native = lang['native'] as String? ?? '';
+  final audio = lang['audio'] as String?;
+  final isSelected = selectedCode == code;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Card(
-        color: theme.cardColor,
-        elevation: isSelected ? 8 : 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: isSelected ? colorScheme.primary : Colors.transparent,
-            width: isSelected ? 2.5 : 0,
-          ),
+  final avatarLabel =
+      (code ?? '').toUpperCase().isNotEmpty && code != 'phone'
+          ? code!.toUpperCase()
+          : 'A';
+
+  final isPlaying =
+      (_playingAsset != null && audio != null && _playingAsset == audio);
+
+  return AnimatedContainer(
+    duration: const Duration(milliseconds: 250),
+    curve: Curves.easeOutCubic,
+    child: Card(
+      elevation: isSelected ? 10 : 3,
+      shadowColor:
+          isSelected ? colorScheme.primary.withOpacity(0.4) : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: isSelected
+              ? colorScheme.primary
+              : colorScheme.outlineVariant.withOpacity(0.3),
+          width: isSelected ? 2.2 : 1,
         ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => _onSelectLanguage(lang),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: colorScheme.surfaceVariant,
-                  child: Text(
-                    avatarLabel,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.bold,
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        hoverColor: colorScheme.primary.withOpacity(0.04),
+        splashColor: colorScheme.primary.withOpacity(0.12),
+        onTap: () => _onSelectLanguage(lang),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            vertical: isMobile ? 14 : 16,
+            horizontal: isMobile ? 14 : 18,
+          ),
+          child: Row(
+            children: [
+              /// AVATAR
+              Container(
+                width: isMobile ? 44 : 48,
+                height: isMobile ? 44 : 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: isSelected
+                        ? [
+                            colorScheme.primary,
+                            colorScheme.secondary
+                          ]
+                        : [
+                            colorScheme.surfaceVariant,
+                            colorScheme.surfaceVariant
+                          ],
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  avatarLabel.substring(
+                      0, avatarLabel.length > 2 ? 2 : avatarLabel.length),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: isSelected
+                        ? colorScheme.onPrimary
+                        : colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 16),
+
+              /// TEXT
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      native,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight:
+                            isSelected ? FontWeight.w800 : FontWeight.w600,
+                        color: colorScheme.onSurface,
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        native,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: colorScheme.onSurface,
-                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                        ),
+                    const SizedBox(height: 4),
+                    Text(
+                      code ?? '',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color:
+                            colorScheme.onSurface.withOpacity(0.6),
+                        letterSpacing: 0.6,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        code ?? '',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              /// AUDIO / TTS BUTTON
+              IconButton(
+                onPressed: () {
+                  if (audio != null) {
+                    _onSelectLanguage(lang, play: true);
+                  } else {
+                    _speakText(native, langCode: code);
+                  }
+                },
+                tooltip: tr('play_language_name'),
+                iconSize: 24,
+                splashRadius: 22,
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: isPlaying
+                      ? Icon(
+                          Icons.stop_circle_rounded,
+                          key: const ValueKey('stop'),
+                          color: colorScheme.secondary,
+                        )
+                      : Icon(
+                          audio != null
+                              ? Icons.volume_up_rounded
+                              : Icons.record_voice_over_rounded,
+                          key: const ValueKey('play'),
+                          color: colorScheme.primary,
                         ),
+                ),
+              ),
+
+              /// SELECTED INDICATOR
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: isSelected
+                    ? Icon(
+                        Icons.check_circle_rounded,
+                        key: const ValueKey('checked'),
+                        color: colorScheme.primary,
+                        size: 26,
+                      )
+                    : Icon(
+                        Icons.radio_button_unchecked_rounded,
+                        key: const ValueKey('unchecked'),
+                        color:
+                            colorScheme.onSurface.withOpacity(0.35),
+                        size: 24,
                       ),
-                    ],
-                  ),
-                ),
-                if (audio != null)
-                  IconButton(
-                    onPressed: () => _onSelectLanguage(lang, play: true),
-                    tooltip: tr('play_language_name'),
-                    icon: isPlaying
-                        ? Icon(Icons.stop_circle_outlined, color: colorScheme.secondary)
-                        : Icon(Icons.volume_up_outlined, color: colorScheme.primary),
-                  )
-                else
-                  IconButton(
-                    onPressed: () {
-                      // speak the language name via TTS
-                      final native = lang['native'] as String? ?? '';
-                      _speakText(native, langCode: code);
-                    },
-                    tooltip: tr('play_language_name'),
-                    icon: Icon(Icons.record_voice_over, color: colorScheme.primary),
-                  ),
-                Icon(
-                  isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                  size: 24,
-                  color: isSelected ? colorScheme.primary : colorScheme.onSurface.withOpacity(0.4),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   // --- BUILD BODY (Loading, Failed, Content) ---
 
@@ -451,84 +527,117 @@ class _LanguageScreenState extends State<LanguageScreen> {
 
     final filtered = _filteredLanguages();
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [colorScheme.primary, colorScheme.secondary]),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))],
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Determine if we are on a "wide" screen (Desktop/Web/Tablet)
+        bool isWide = constraints.maxWidth > 600;
+        
+        // Calculate a safe padding that centers content on wide screens
+        // Max content width on desktop
+        double contentWidth = isWide ? 800 : constraints.maxWidth;
+        // Padding to center
+        double horizontalPadding = isWide ? (constraints.maxWidth - contentWidth) / 2 : 24;
+
+        return Center( // Center content for extra large screens
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1000), // Max constraint for ultra-wide monitors
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: isWide ? 40 : 24, vertical: 20),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    tr('lets_pick_language'),
-                    style: theme.textTheme.headlineSmall?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w800),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [colorScheme.primary, colorScheme.secondary]),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tr('lets_pick_language'),
+                          style: theme.textTheme.headlineSmall?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          tr('choose_language_instructions'),
+                          style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onPrimary.withOpacity(0.8)),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    tr('choose_language_instructions'),
-                    style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onPrimary.withOpacity(0.8)),
+                  const SizedBox(height: 20),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.inputDecorationTheme.fillColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12.0),
+                          child: Icon(Icons.search, color: colorScheme.onSurface.withOpacity(0.6)),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            onChanged: (v) => setState(() => _searchText = v),
+                            decoration: InputDecoration(
+                              hintText: tr('search_hint'),
+                              hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.6)),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+                            ),
+                            style: theme.textTheme.bodyLarge,
+                          ),
+                        ),
+                        if (_searchText.isNotEmpty)
+                          IconButton(
+                            onPressed: () => setState(() => _searchText = ''),
+                            icon: Icon(Icons.clear, color: colorScheme.onSurface.withOpacity(0.6)),
+                          ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              decoration: BoxDecoration(
-                color: theme.inputDecorationTheme.fillColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: 12.0),
-                    child: Icon(Icons.search, color: colorScheme.onSurface.withOpacity(0.6)),
-                  ),
+                  const SizedBox(height: 16),
                   Expanded(
-                    child: TextField(
-                      onChanged: (v) => setState(() => _searchText = v),
-                      decoration: InputDecoration(
-                        hintText: tr('search_hint'),
-                        hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.6)),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-                      ),
-                      style: theme.textTheme.bodyLarge,
-                    ),
+                    child: filtered.isEmpty
+                        ? Center(child: Text(tr('no_languages_found'), style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onBackground.withOpacity(0.6))))
+                        : isWide
+                            // Grid View for Wide Screens
+                            ? GridView.builder(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 400, // Cards won't be wider than 400px
+                                  mainAxisExtent: 100,     // Fixed height for cards
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 16,
+                                ),
+                                itemCount: filtered.length,
+                                itemBuilder: (context, index) {
+                                  final lang = filtered[index] as Map;
+                                  return _buildLanguageTile(lang);
+                                },
+                              )
+                            // List View for Mobile
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                itemCount: filtered.length,
+                                itemBuilder: (context, index) {
+                                  final lang = filtered[index] as Map;
+                                  return _buildLanguageTile(lang);
+                                },
+                              ),
                   ),
-                  if (_searchText.isNotEmpty)
-                    IconButton(
-                      onPressed: () => setState(() => _searchText = ''),
-                      icon: Icon(Icons.clear, color: colorScheme.onSurface.withOpacity(0.6)),
-                    ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(child: Text(tr('no_languages_found'), style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onBackground.withOpacity(0.6))))
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        final lang = filtered[index] as Map;
-                        return _buildLanguageTile(lang);
-                      },
-                    ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -565,25 +674,34 @@ class _LanguageScreenState extends State<LanguageScreen> {
       ),
       body: _buildBody(),
       bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: ElevatedButton.icon(
-            onPressed: selectedCode == null || _loading ? null : _onNext,
-            icon: const Icon(Icons.arrow_forward),
-            label: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Text(
-                tr('continue'),
-                style: theme.textTheme.bodyLarge?.copyWith(fontSize: 18, color: colorScheme.onPrimary, fontWeight: FontWeight.w700),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Constrain width of bottom button on desktop
+            bool isWide = constraints.maxWidth > 600;
+            return Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: isWide ? (constraints.maxWidth - 400) / 2 : 24, 
+                vertical: 16
               ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 5,
-            ),
-          ),
+              child: ElevatedButton.icon(
+                onPressed: selectedCode == null || _loading ? null : _onNext,
+                icon: const Icon(Icons.arrow_forward),
+                label: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Text(
+                    tr('continue'),
+                    style: theme.textTheme.bodyLarge?.copyWith(fontSize: 18, color: colorScheme.onPrimary, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 5,
+                ),
+              ),
+            );
+          }
         ),
       ),
     );

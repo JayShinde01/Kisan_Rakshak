@@ -15,7 +15,6 @@ import 'package:demo/widgets/theme_manager.dart';
 import 'package:demo/screens/chat_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
-
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,10 +26,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Palette (kept)
+  // ---------------- COLORS ----------------
   static const Color primaryGreen = Color(0xFF2E8B3A);
   static const Color lightGreen = Color(0xFF74C043);
   static const Color offWhite = Color(0xFFF4F9F4);
+
+  // ---------------- NAV ----------------
+  int _selectedIndex = 0;
+  int notificationCount = 9;
 
   final List<Widget> _screens = const [
     HomeContent(),
@@ -41,394 +44,344 @@ class _HomeScreenState extends State<HomeScreen> {
     Cropcare(),
   ];
 
-  int _selectedIndex = 0;
-  int notificationCount = 9;
-  File? _lastPickedImage;
-
-  // TTS
+  // ---------------- TTS ----------------
   late final FlutterTts _flutterTts;
-  double _speechRate = 0.9;
-  static const String _prefsSpeechRateKey = 'speech_rate';
+  bool _isSpeaking = false;
+  bool _ttsMuted = false;
 
+  static const String _prefsSpeechRateKey = 'speech_rate';
+  static const String _prefsTtsMutedKey = 'tts_muted';
+
+  double _speechRate = 0.9;
+
+  // ---------------- INIT ----------------
   @override
   void initState() {
     super.initState();
     _checkLoggedIn();
-    _initTts().then((_) async {
-      // speak a welcome message after TTS init
-      await _speakOnOpen();
-    });
-  }
-
-  Future<void> _initTts() async {
-    _flutterTts = FlutterTts();
-    try {
-      // load persisted speech rate if available
-      final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getDouble(_prefsSpeechRateKey);
-      if (saved != null) _speechRate = saved;
-
-      await _flutterTts.setSpeechRate(_speechRate);
-      await _flutterTts.setPitch(1.0);
-
-      // set language to app locale (best effort)
-      final localeTag = _localeTagFromLocale(context.locale) ?? 'en-US';
-      try {
-        await _flutterTts.setLanguage(localeTag);
-      } catch (_) {
-        // ignore if not supported
-      }
-    } catch (e) {
-      debugPrint('HomeScreen TTS init error: $e');
-    }
+    _loadTtsMute();
+    _initTts().then((_) => _speakOnOpen());
   }
 
   @override
   void dispose() {
-    try {
-      _flutterTts.stop();
-    } catch (_) {}
+    _flutterTts.stop();
     super.dispose();
   }
 
-  String? _localeTagFromLocale(Locale? locale) {
-    if (locale == null) return 'en-US';
-    final code = locale.languageCode.toLowerCase();
-    return _localeTagForLang(code);
-  }
-
-  String? _localeTagForLang(String? lang) {
-    if (lang == null) return 'en-US';
-    final code = lang.toLowerCase();
-    const mapping = {
-      'en': 'en-US',
-      'en_us': 'en-US',
-      'en_gb': 'en-GB',
-      'hi': 'hi-IN',
-      'mr': 'mr-IN',
-      'bn': 'bn-IN',
-      'gu': 'gu-IN',
-      'kn': 'kn-IN',
-      'ml': 'ml-IN',
-      'ta': 'ta-IN',
-      'te': 'te-IN',
-      'ur': 'ur-PK',
-      'ar': 'ar-SA',
-      'fr': 'fr-FR',
-      'es': 'es-ES',
-      'de': 'de-DE',
-      'ru': 'ru-RU',
-      'ja': 'ja-JP',
-      'zh': 'zh-CN',
-      'pt': 'pt-PT',
-    };
-    if (mapping.containsKey(code)) return mapping[code];
-    if (lang.contains('-') || lang.contains('_')) return lang;
-    return 'en-US';
-  }
-
-  Future<void> _speakText(String text, {String? langCode}) async {
-    if (text.isEmpty) return;
-    try {
-      await _flutterTts.stop();
-      final tag = langCode != null ? _localeTagForLang(langCode) : _localeTagFromLocale(context.locale);
-      if (tag != null) {
-        try {
-          await _flutterTts.setLanguage(tag);
-        } catch (_) {}
-      }
-      await _flutterTts.setSpeechRate(_speechRate);
-      await _flutterTts.setPitch(1.0);
-      await _flutterTts.speak(text);
-    } catch (e) {
-      debugPrint('HomeScreen TTS speak error: $e');
-    }
-  }
-
-  Future<void> _speakOnOpen() async {
-    // Short localized welcome with optional notification count
-    final welcome = tr('welcome_home_tts', namedArgs: {'app': tr('app_title')});
-    if (notificationCount > 0) {
-      final nText = notificationCount > 9 ? tr('notifications_many_tts') : tr('notifications_count_tts', namedArgs: {'n': notificationCount.toString()});
-      await _speakText('$welcome. $nText');
-    } else {
-      await _speakText(welcome);
-    }
-  }
-
-  Future<void> _speakOnNav(int index) async {
-    // speak when navigating to certain screens (diagnose example)
-    if (index == 2) {
-      // Diagnose tab
-      final text = tr('opening_diagnose_tts');
-      await _speakText(text);
-    } else if (index == 0) {
-      // home tab
-      final text = tr('returning_home_tts');
-      await _speakText(text);
-    }
-    // Add more navigation-specific phrases if desired
-  }
-
+  // ---------------- AUTH ----------------
   Future<void> _checkLoggedIn() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (!mounted) return;
+    if (FirebaseAuth.instance.currentUser == null && mounted) {
       Navigator.pushReplacementNamed(context, '/login');
     }
   }
 
-  void _onNavSelected(int index) {
-    setState(() => _selectedIndex = index);
-    _speakOnNav(index);
+  // ---------------- TTS CORE ----------------
+  Future<void> _initTts() async {
+    _flutterTts = FlutterTts();
+    final prefs = await SharedPreferences.getInstance();
+    _speechRate = prefs.getDouble(_prefsSpeechRateKey) ?? _speechRate;
+
+    await _flutterTts.setSpeechRate(_speechRate);
+    await _flutterTts.setPitch(1.0);
+
+    _flutterTts.setStartHandler(() => setState(() => _isSpeaking = true));
+    _flutterTts.setCompletionHandler(() => setState(() => _isSpeaking = false));
+    _flutterTts.setCancelHandler(() => setState(() => _isSpeaking = false));
+
+    try {
+      await _flutterTts.setLanguage(_localeTagFromLocale(context.locale)!);
+    } catch (_) {}
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    final width = mq.size.width;
+  String? _localeTagFromLocale(Locale? locale) {
+    if (locale == null) return 'en-US';
+    const map = {
+      'en': 'en-US',
+      'hi': 'hi-IN',
+      'mr': 'mr-IN',
+      'gu': 'gu-IN',
+      'pa': 'pa-IN',
+    };
+    return map[locale.languageCode] ?? 'en-US';
+  }
 
-    final isMobile = width < 600;
-    final isTablet = width >= 600 && width < 1024;
-    final isDesktop = width >= 1024;
+  Future<void> _speakText(String text) async {
+    if (text.isEmpty || _ttsMuted) return;
+    await _flutterTts.stop();
+    await _flutterTts.speak(text);
+  }
 
-    final toolbarHeight = isMobile ? 56.0 : (isTablet ? 64.0 : 72.0);
-    final iconSize = isMobile ? 20.0 : (isTablet ? 22.0 : 24.0);
-    final avatarSize = isMobile ? 36.0 : (isTablet ? 42.0 : 48.0);
-    final titleFont = isMobile ? 18.0 : (isTablet ? 20.0 : 22.0);
-
-    return Scaffold(
-      backgroundColor: offWhite,
-      drawer: _buildAppDrawer(context, isDesktop: isDesktop),
-
-     floatingActionButton: kIsWeb
-    ? null
-    : FloatingActionButton(
-        heroTag: 'home_chat_fab',
-        backgroundColor: primaryGreen,
-        child: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ChatScreen()),
-          );
-        },
-      ),
-
-
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(toolbarHeight),
-        child: AppBar(
-          automaticallyImplyLeading: true,
-          backgroundColor: primaryGreen,
-          elevation: 2,
-          toolbarHeight: toolbarHeight,
-          titleSpacing: 12,
-          title: Row(children: [
-            Container(
-              width: avatarSize,
-              height: avatarSize,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4)]),
-              child: CircleAvatar(
-                radius: 24,
-                backgroundColor: Colors.white,
-                child: ClipOval(
-                  child: Image.asset(
-                    'assets/images/Logo_App.png',
-                    height: 80,
-                    width: 80,
-                    fit: BoxFit.cover, // or BoxFit.contain based on your logo
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(width: isMobile ? 5 : 7),
-            Flexible(
-              child: Text(
-                tr('app_title'),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: titleFont),
-              ),
-            ),
-          ]),
-          actions: [
-            const Padding(padding: EdgeInsets.symmetric(horizontal: 4.0), child: ThemeToggleButton()),
-            IconButton(
-              tooltip: tr('schedule'),
-              icon: Icon(Icons.event_note_outlined, color: Colors.white, size: iconSize + 2),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScheduleScreen())),
-            ),
-            Padding(padding: EdgeInsets.only(right: isMobile ? 4 : 8), child: _notificationButton(isMobile: isMobile, iconSize: iconSize)),
-          ],
-        ),
-      ),
-
-      body: Row(children: [
-        if (isDesktop) ...[
-          NavigationRail(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _onNavSelected,
-            extended: width > 1400,
-            labelType: width > 1400 ? NavigationRailLabelType.none : NavigationRailLabelType.all,
-            leading: Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Column(children: [
-              ]),
-            ),
-            minWidth: 72,
-            destinations: [
-              NavigationRailDestination(icon: const Icon(Icons.chat_outlined), label: Text(tr('nav_chat'))),
-              NavigationRailDestination(icon: const Icon(Icons.storefront), label: Text(tr('nav_market'))),
-              NavigationRailDestination(icon: const Icon(Icons.biotech), label: Text(tr('nav_diagnose'))),
-              NavigationRailDestination(icon: const Icon(Icons.groups_outlined), label: Text(tr('nav_community'))),
-              NavigationRailDestination(icon: const Icon(Icons.map_outlined), label: Text(tr('nav_map'))),
-              NavigationRailDestination(icon: const Icon(Icons.info_outline), label: Text(tr('nav_info'))),
-            ],
-          ),
-          const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE6E6E6)),
-        ],
-
-        Expanded(
-          child: IndexedStack(index: _selectedIndex, children: _screens.map((w) => SafeArea(top: false, bottom: false, child: w)).toList()),
-        ),
-      ]),
-
-      bottomNavigationBar: isDesktop
-          ? null
-          : Container(
-              decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey.shade200, width: 0.6)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)]),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6.0),
-                child: BottomNavigationBar(
-                  type: BottomNavigationBarType.fixed,
-                  backgroundColor: Colors.white,
-                  selectedItemColor: primaryGreen,
-                  unselectedItemColor: Colors.black54,
-                  showUnselectedLabels: true,
-                  currentIndex: _selectedIndex,
-                  onTap: _onNavSelected,
-                  items: [
-                    BottomNavigationBarItem(icon: const Icon(Icons.chat_outlined), label: tr('nav_chat')),
-                    BottomNavigationBarItem(icon: const Icon(Icons.storefront), label: tr('nav_market')),
-                    BottomNavigationBarItem(icon: const Icon(Icons.biotech), label: tr('nav_diagnose')),
-                    BottomNavigationBarItem(icon: const Icon(Icons.groups_outlined), label: tr('nav_community')),
-                    BottomNavigationBarItem(icon: const Icon(Icons.map_outlined), label: tr('nav_map')),
-                    BottomNavigationBarItem(icon: const Icon(Icons.info_outline), label: tr('nav_info')),
-                  ],
-                ),
-              ),
-            ),
+  Future<void> _speakOnOpen() async {
+    await _speakText(
+      tr('welcome_home_tts', namedArgs: {'app': tr('app_title')}),
     );
   }
 
-  Widget _notificationButton({required bool isMobile, required double iconSize}) {
-    return Semantics(
-      label: tr('notifications'),
-      button: true,
-      child: Stack(clipBehavior: Clip.none, children: [
+  // ---------------- TTS MUTE ----------------
+  Future<void> _loadTtsMute() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _ttsMuted = prefs.getBool(_prefsTtsMutedKey) ?? false;
+    });
+  }
+
+  Future<void> _toggleTtsMute() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _ttsMuted = !_ttsMuted);
+
+    await prefs.setBool(_prefsTtsMutedKey, _ttsMuted);
+
+    if (_ttsMuted) {
+      await _flutterTts.stop();
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _ttsMuted
+              ? tr('voice_muted', namedArgs: {'default': 'Voice instructions muted'})
+              : tr('voice_unmuted', namedArgs: {'default': 'Voice instructions enabled'}),
+        ),
+      ),
+    );
+  }
+
+  // ---------------- NAV HANDLER ----------------
+  void _onNavSelected(int index) {
+    setState(() => _selectedIndex = index);
+
+    if (index == 2) {
+      _speakText(tr('opening_diagnose_tts'));
+    }
+  }
+
+  // ---------------- UI ----------------
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 1024;
+    final isMobile = width < 600;
+
+    return Scaffold(
+      backgroundColor: offWhite,
+      drawer: _buildDrawer(isDesktop),
+      appBar: _buildAppBar(isMobile),
+      body: Row(
+  children: [
+    if (isDesktop) _buildRail(),
+    Expanded(
+      child: isDesktop
+          ? Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                child: IndexedStack(
+                  index: _selectedIndex,
+                  children: _screens,
+                ),
+              ),
+            )
+          : IndexedStack(
+              index: _selectedIndex,
+              children: _screens,
+            ),
+    ),
+  ],
+),
+
+      floatingActionButton: !_ttsMuted && _isSpeaking
+          ? FloatingActionButton.small(
+              backgroundColor: Colors.redAccent,
+              tooltip: tr('mute_voice'),
+              onPressed: _toggleTtsMute,
+              child: const Icon(Icons.volume_off),
+            )
+          : null,
+      bottomNavigationBar: isDesktop ? null : _buildBottomNav(),
+    );
+  }
+
+  // ---------------- APP BAR ----------------
+  AppBar _buildAppBar(bool isMobile) {
+    return AppBar(
+      backgroundColor: primaryGreen,
+      elevation: 2,
+      title: Text(tr('app_title')),
+      actions: [
         IconButton(
-          onPressed: () {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationPage()));
-          },
-          icon: Icon(Icons.notifications_none, size: 28),
-          color: Colors.white,
-          tooltip: tr('notifications'),
+          tooltip: _ttsMuted
+              ? tr('unmute_voice', namedArgs: {'default': 'Enable voice instructions'})
+              : tr('mute_voice', namedArgs: {'default': 'Mute voice instructions'}),
+          icon: Icon(_ttsMuted ? Icons.volume_off : Icons.volume_up),
+          onPressed: _toggleTtsMute,
+        ),
+        const ThemeToggleButton(),
+        IconButton(
+          tooltip: tr('schedule'),
+          icon: const Icon(Icons.event_note_outlined),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ScheduleScreen()),
+          ),
+        ),
+        _notificationButton(),
+      ],
+    );
+  }
+
+  // ---------------- NAV UI ----------------
+  Widget _buildRail() {
+    return NavigationRail(
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: _onNavSelected,
+      labelType: NavigationRailLabelType.all,
+      destinations: [
+        NavigationRailDestination(icon: Icon(Icons.home_filled), label: Text(tr('nav_chat'))),
+        NavigationRailDestination(icon: Icon(Icons.store), label: Text(tr('nav_market'))),
+        NavigationRailDestination(icon: Icon(Icons.biotech), label: Text(tr('nav_diagnose'))),
+        NavigationRailDestination(icon: Icon(Icons.groups), label: Text(tr('nav_community'))),
+        NavigationRailDestination(icon: Icon(Icons.map), label: Text(tr('nav_map'))),
+        NavigationRailDestination(icon: Icon(Icons.info), label: Text(tr('nav_info'))),
+      ],
+    );
+  }
+
+  Widget _buildBottomNav() {
+    return BottomNavigationBar(
+      currentIndex: _selectedIndex,
+      onTap: _onNavSelected,
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: primaryGreen,
+      items: [
+        BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: tr('nav_chat')),
+        BottomNavigationBarItem(icon: Icon(Icons.store), label: tr('nav_market')),
+        BottomNavigationBarItem(icon: Icon(Icons.biotech), label: tr('nav_diagnose')),
+        BottomNavigationBarItem(icon: Icon(Icons.groups), label: tr('nav_community')),
+        BottomNavigationBarItem(icon: Icon(Icons.map), label: tr('nav_map')),
+        BottomNavigationBarItem(icon: Icon(Icons.info), label: tr('nav_info')),
+      ],
+    );
+  }
+
+  // ---------------- NOTIFICATION ----------------
+  Widget _notificationButton() {
+    return Stack(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.notifications_none),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => NotificationPage()),
+          ),
         ),
         if (notificationCount > 0)
           Positioned(
             right: 6,
             top: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.25), blurRadius: 6, offset: const Offset(0, 2))]),
-              constraints: const BoxConstraints(minWidth: 20, minHeight: 18),
-              child: Text(notificationCount > 9 ? '9+' : notificationCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-            ),
-          ),
-      ]),
-    );
-  }
-
-  Widget _buildAppDrawer(BuildContext context, {required bool isDesktop}) {
-    final user = FirebaseAuth.instance.currentUser;
-    final photoUrl = user?.photoURL;
-
-    return Drawer(
-      width: isDesktop ? 320 : 300,
-      child: Container(
-        color: const Color(0xFFF7FBF7),
-        child: Column(children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 36, 16, 18),
-            decoration: const BoxDecoration(gradient: LinearGradient(colors: [primaryGreen, lightGreen]), borderRadius: BorderRadius.only(bottomRight: Radius.circular(12))),
-            child: Row(children: [
-              GestureDetector(
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.pushNamed(context, '/profile');
-                },
-                child: CircleAvatar(
-                  radius: 34,
-                  backgroundColor: Colors.white,
-                  child: ClipOval(
-                    child: SizedBox(width: 64, height: 64, child: _lastPickedImage != null ? Image.file(_lastPickedImage!, fit: BoxFit.cover) : (photoUrl != null ? Image.network(photoUrl, fit: BoxFit.cover) : const Icon(Icons.person, size: 36, color: primaryGreen))),
-
-                  ),
-                ),
+            child: CircleAvatar(
+              radius: 9,
+              backgroundColor: Colors.red,
+              child: Text(
+                notificationCount > 9 ? '9+' : '$notificationCount',
+                style: const TextStyle(fontSize: 10, color: Colors.white),
               ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(user?.displayName ?? tr('default_user'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
-                const SizedBox(height: 6),
-                Text(user?.email ?? '', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-              ])),
-            ]),
-          ),
-          const SizedBox(height: 10),
-          Expanded(child: ListView(padding: const EdgeInsets.symmetric(vertical: 6), children: [
-            const SizedBox(height: 6),
-            _drawerTile(icon: Icons.agriculture, label: tr('drawer_my_fields'), onTap: () => Navigator.pop(context)),
-            _drawerTile(icon: Icons.cloud_download, label: tr('drawer_crop_care'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => Cropcare()))),
-            _drawerTile(icon: Icons.map, label: tr('drawer_field_map'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FieldMapScreen()))),
-            _drawerTile(icon: Icons.forum, label: tr('drawer_community'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CommunityPostPage()))),
-            _drawerTile(icon: Icons.notifications, label: tr('drawer_notifications'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationPage()))),
-            const Divider(),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8), child: Text(tr('useful'), style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0), fontWeight: FontWeight.w700))),
-            _drawerTile(icon: Icons.help_outline, label: tr('drawer_tutorials'), onTap: () {}),
-            _drawerTile(icon: Icons.card_giftcard, label: tr('drawer_rewards'), onTap: () {}),
-            _drawerTile(icon: Icons.attach_money, label: tr('drawer_plans'), onTap: () {}),
-            _drawerTile(icon: Icons.mail_outline, label: tr('drawer_contact_us'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ContactUsPage()))),
-            const SizedBox(height: 20),
-          ])),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12), child: Column(children: [
-            ElevatedButton.icon(
-              onPressed: () async {
-                await FirebaseAuth.instance.signOut();
-                if (!mounted) return;
-                Navigator.pushReplacementNamed(context, '/login');
-              },
-              icon: const Icon(Icons.logout, size: 18),
-              label: Text(tr('sign_out')),
-              style: ElevatedButton.styleFrom(backgroundColor: primaryGreen, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(44), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             ),
-            const SizedBox(height: 8),
-            Text(tr('privacy_terms'), style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-          ])),
-        ]),
-      ),
+          ),
+      ],
     );
   }
 
-  Widget _drawerTile({required IconData icon, required String label, required VoidCallback onTap}) {
+  // ---------------- DRAWER ----------------
+ Widget _buildDrawer(bool isDesktop) {
+  final user = FirebaseAuth.instance.currentUser;
+
+  return Drawer(
+    width: isDesktop ? 320 : null,
+    child: Column(
+      children: [
+    InkWell(
+  onTap: () {
+    Navigator.pop(context); // close drawer
+    Navigator.pushNamed(context, '/profile');
+    // OR
+    // Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+  },
+  child: UserAccountsDrawerHeader(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(colors: [primaryGreen, lightGreen]),
+    ),
+    accountName: Text(user?.displayName ?? tr('default_user')),
+    accountEmail: Text(user?.email ?? ''),
+    currentAccountPicture: const CircleAvatar(
+      child: Icon(Icons.person),
+    ),
+  ),
+),
+
+
+        _drawerTile(Icons.agriculture, tr('drawer_my_fields'), () {}),
+
+        _drawerTile(Icons.cloud, tr('drawer_crop_care'), () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => Cropcare()),
+          );
+        }),
+
+        _drawerTile(Icons.map, tr('drawer_field_map'), () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => FieldMapScreen()),
+          );
+        }),
+
+        _drawerTile(Icons.group, tr('drawer_community'), () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => CommunityPostPage()),
+          );
+        }),
+
+        _drawerTile(Icons.mail, tr('drawer_contact_us'), () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ContactUsPage()),
+          );
+        }),
+
+        // 🔹 DIVIDER
+        const Divider(),
+
+        // 🌐 CHANGE LANGUAGE OPTION
+        _drawerTile(Icons.language, tr('change_language'), () {
+          Navigator.pop(context); // close drawer
+          Navigator.pushNamed(context, '/language');
+          // OR if using direct screen:
+          // Navigator.push(context, MaterialPageRoute(builder: (_) => const LanguageScreen()));
+        }),
+
+        const Spacer(),
+
+        ListTile(
+          leading: const Icon(Icons.logout),
+          title: Text(tr('sign_out')),
+          onTap: () async {
+            await FirebaseAuth.instance.signOut();
+            if (!mounted) return;
+            Navigator.pushReplacementNamed(context, '/login');
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+  Widget _drawerTile(IconData icon, String label, VoidCallback onTap) {
     return ListTile(
       leading: Icon(icon, color: primaryGreen),
-      title: Text(label, style: const TextStyle(color: Color.fromARGB(255, 51, 74, 51), fontWeight: FontWeight.w600)),
+      title: Text(label),
       onTap: onTap,
-      horizontalTitleGap: 6,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      minLeadingWidth: 20,
     );
   }
 }

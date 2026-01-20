@@ -120,7 +120,7 @@
   "strength_strong": "Strong",
   "open_chat": "Open chat",
   "schedule": "Schedule",
-  "nav_chat": "Chat",
+  "nav_chat": "Home",
   "nav_market": "Market",
   "nav_diagnose": "Diagnose",
   "nav_community": "Community",
@@ -404,7 +404,11 @@
   "notifications_many_tts": "You have many new notifications",
   "opening_diagnose_tts": "Opening plant diagnosis. Please take a clear photo of the affected leaf.",
   "returning_home_tts": "Returning to home.",
-    "speak_diagnosis": "Diagnosis: {}. Confidence: {}%"
+    "speak_diagnosis": "Diagnosis: {}. Confidence: {}%",
+"mute_voice": "Mute voice instructions",
+"unmute_voice": "Enable voice instructions",
+"voice_muted": "Voice instructions muted",
+"voice_unmuted": "Voice instructions enabled"
 
 
 }
