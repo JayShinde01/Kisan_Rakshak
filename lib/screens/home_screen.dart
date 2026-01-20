@@ -171,24 +171,23 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Row(
   children: [
     if (isDesktop) _buildRail(),
+
     Expanded(
-      child: isDesktop
-          ? Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1200),
-                child: IndexedStack(
-                  index: _selectedIndex,
-                  children: _screens,
-                ),
-              ),
-            )
-          : IndexedStack(
-              index: _selectedIndex,
-              children: _screens,
-            ),
+      child: IndexedStack(
+        index: _selectedIndex,
+        children: _screens.map(
+          (screen) => Container(
+            width: double.infinity,
+            height: double.infinity,
+            color: offWhite, // or Colors.black if dark theme
+            child: screen,
+          ),
+        ).toList(),
+      ),
     ),
   ],
 ),
+
 
       floatingActionButton: !_ttsMuted && _isSpeaking
           ? FloatingActionButton.small(

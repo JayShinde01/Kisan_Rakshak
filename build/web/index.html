@@ -104,7 +104,42 @@
 <body>
 
   <!-- Jotform Chatbot -->
-  <script src="https://cdn.jotfor.ms/agent/embedjs/019b02bac0887d99ae37356ecd239e719a6b/embed.js"></script>
+  <script>
+  function loadJotformBot() {
+    if (document.getElementById("jotform-chatbot")) return;
+
+    const script = document.createElement("script");
+    script.id = "jotform-chatbot";
+    script.src =
+      "https://cdn.jotfor.ms/agent/embedjs/019b02bac0887d99ae37356ecd239e719a6b/embed.js";
+    script.async = true;
+    document.body.appendChild(script);
+
+    console.log("🤖 Jotform chatbot loaded");
+  }
+
+  function removeJotformBot() {
+    const script = document.getElementById("jotform-chatbot");
+    if (script) script.remove();
+
+    // Also remove iframe if already created
+    document
+      .querySelectorAll('iframe[src*="jotfor.ms"]')
+      .forEach((el) => el.remove());
+
+    console.log("🗑️ Jotform chatbot removed");
+  }
+
+  // ✅ THIS is the key fix
+  firebase.auth().onAuthStateChanged((user) => {
+    if (user) {
+      loadJotformBot();   // login → show bot
+    } else {
+      removeJotformBot(); // logout → hide bot
+    }
+  });
+</script>
+
 
   <!-- Flutter -->
   <script src="flutter_bootstrap.js" async></script>
